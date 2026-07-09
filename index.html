@@ -172,10 +172,7 @@
 <script>
 // ── CONFIG ──────────────────────────────────────────────────
 const SAVVY_CONFIG = 'https://savvy-config-production.up.railway.app';
-const SELLBRITE_API = 'https://api.sellbrite.com/v1';
-
-let SB_TOKEN = '4729d1df-4b2f-43bf-a36b-bef628805133';
-let SB_SECRET = 'e176afbdddea29670a8cf3ff4356c475';
+const SB_PROXY = 'https://savvy-ebay-prices-production.up.railway.app';
 let scanner = null;
 let currentProduct = null;
 let _tt = null;
@@ -200,22 +197,7 @@ function goHome(){
   window.location.href='https://octavio-cmd.github.io/savvy-home/';
 }
 
-// ── AUTH ─────────────────────────────────────────────────────
-function sbAuth(){
-  return 'Basic ' + btoa(SB_TOKEN + ':' + SB_SECRET);
-}
-
-// ── RAILWAY CONFIG ───────────────────────────────────────────
-(async function loadConfig(){
-  try {
-    const r = await fetch(SAVVY_CONFIG + '/config');
-    if(r.ok){
-      const d = await r.json();
-      if(d.sellbrite_token) SB_TOKEN = d.sellbrite_token;
-      if(d.sellbrite_secret) SB_SECRET = d.sellbrite_secret;
-    }
-  } catch(e){ console.warn('Config load failed, using defaults'); }
-})();
+// ── RAILWAY CONFIG (no credentials needed in browser) ───────
 
 // ── SCANNER ──────────────────────────────────────────────────
 function openScanner(){
@@ -255,40 +237,26 @@ function searchManual(){
   searchUPC(v);
 }
 
-// ── SEARCH SELLBRITE ─────────────────────────────────────────
+// ── SEARCH SELLBRITE via Railway Proxy ───────────────────────
 async function searchUPC(upc){
   showScreen('scr-load');
-  $('load-msg').textContent = 'Searching Sellbrite for UPC: ' + upc + '...';
+  const upcClean = upc.replace(/\D/g,'');
+  $('load-msg').textContent = 'Searching Sellbrite for UPC: ' + upcClean + '...';
 
   try {
-    // Strategy: search products where SKU contains the UPC
-    // Sellbrite SKU format: BRD-UPC-PACK e.g. NIK-012345678901-1PK
-    const products = await sbFetch('/products?limit=100');
+    const res = await fetch(SB_PROXY + '/sb/search?upc=' + encodeURIComponent(upcClean));
+    const data = await res.json();
 
-    if(!products || !products.length){
-      showNotFound('No products found in Sellbrite');
+    if(res.status === 404 || data.status === 'not_found'){
+      showNotFound('No product found with UPC: ' + upcClean + '\n\nMake sure the UPC is part of your SKU in Sellbrite (e.g. NIK-' + upcClean + '-1PK)');
       return;
     }
 
-    // Find product whose SKU contains the UPC
-    const upcClean = upc.replace(/\D/g,'');
-    const match = products.find(p => {
-      const sku = (p.sku || '').toUpperCase();
-      return sku.includes(upcClean) || (p.upc || '').replace(/\D/g,'') === upcClean;
-    });
-
-    if(!match){
-      // Try searching by UPC field directly
-      const byUpc = await sbFetch('/products?upc=' + upcClean + '&limit=10');
-      if(byUpc && byUpc.length){
-        await showProduct(byUpc[0], upc);
-        return;
-      }
-      showNotFound('No product found with UPC: ' + upc + '\n\nMake sure the UPC is part of your SKU (e.g. NIK-' + upcClean + '-1PK)');
-      return;
+    if(!res.ok || data.status === 'error'){
+      throw new Error(data.error || 'Search failed');
     }
 
-    await showProduct(match, upc);
+    await showProductFromProxy(data, upcClean);
 
   } catch(err){
     console.error('Search error:', err);
@@ -297,80 +265,52 @@ async function searchUPC(upc){
   }
 }
 
-// ── SELLBRITE API FETCH ──────────────────────────────────────
+// ── PROXY FETCH (Railway handles Sellbrite auth) ─────────────
 async function sbFetch(path, options={}){
-  const url = SELLBRITE_API + path;
+  // Convert Sellbrite API path to Railway proxy path
+  const url = SB_PROXY + path;
   const res = await fetch(url, {
     ...options,
-    headers: {
-      'Authorization': sbAuth(),
-      'Content-Type': 'application/json',
-      ...(options.headers||{})
-    }
+    headers: { 'Content-Type': 'application/json', ...(options.headers||{}) }
   });
-
-  if(!res.ok){
-    if(res.status === 401) throw new Error('Invalid Sellbrite credentials');
-    if(res.status === 404) return null;
-    throw new Error('Sellbrite API error: ' + res.status);
-  }
-
+  if(res.status === 404) return null;
+  if(!res.ok) throw new Error('Proxy error: ' + res.status);
   return res.json();
 }
 
-// ── SHOW PRODUCT ─────────────────────────────────────────────
-async function showProduct(product, searchedUpc){
-  currentProduct = product;
+// ── SHOW PRODUCT FROM PROXY ─────────────────────────────────
+async function showProductFromProxy(data, searchedUpc){
+  const product = data.product;
+  const invData = data.inventory || {};
+  const salesData = data.sales || {};
 
-  $('load-msg').textContent = 'Loading inventory & sales...';
+  currentProduct = {
+    sku: product.sku,
+    product_id: product.product_id,
+    warehouse_uuid: (invData.channels||[])[0]?.warehouse_uuid || ''
+  };
 
-  // Get inventory levels
-  let inventory = [];
-  try {
-    const inv = await sbFetch('/inventory?product_id=' + product.product_id + '&limit=50');
-    inventory = inv || [];
-  } catch(e){ console.warn('Inventory fetch failed', e); }
-
-  // Get order history for this SKU
-  let orders = [];
-  try {
-    const ord = await sbFetch('/orders?sku=' + encodeURIComponent(product.sku) + '&limit=50&order=created_at+desc');
-    orders = ord || [];
-  } catch(e){ console.warn('Orders fetch failed', e); }
-
-  // Calculate stats
-  const totalQty = inventory.reduce((sum, inv) => sum + (inv.available_quantity||0), 0);
-  const totalSold = orders.reduce((sum, o) => {
-    const item = (o.items||[]).find(i => i.sku === product.sku);
-    return sum + (item ? item.quantity : 0);
-  }, 0);
-  const totalRevenue = orders.reduce((sum, o) => {
-    const item = (o.items||[]).find(i => i.sku === product.sku);
-    return sum + (item ? parseFloat(item.unit_price||0) * (item.quantity||0) : 0);
-  }, 0);
-
-  // Days listed
+  const totalQty = invData.total_quantity || 0;
+  const totalSold = salesData.total_sold || 0;
+  const totalRevenue = salesData.total_revenue || 0;
+  const daysListed = product.days_listed;
   const createdAt = product.created_at ? new Date(product.created_at) : null;
-  const daysListed = createdAt ? Math.floor((Date.now() - createdAt)/86400000) : null;
 
-  // Build HTML
-  const channels = inventory.map(inv => {
+  const channels = (invData.channels||[]).map(inv => {
     const ch = (inv.channel_name||'').toLowerCase();
-    return `<span class="channel-badge ${ch.includes('ebay')?'ebay':ch.includes('shopify')?'shopify':''}">${inv.channel_name||'Unknown'}: ${inv.available_quantity||0}</span>`;
+    return `<span class="channel-badge ${ch.includes('ebay')?'ebay':ch.includes('shopify')?'shopify':''}">${inv.channel_name||'Unknown'}: ${inv.available||0}</span>`;
   }).join('');
 
-  const salesRows = orders.slice(0,10).map(o => {
-    const item = (o.items||[]).find(i=>i.sku===product.sku);
-    if(!item) return '';
+  const salesRows = (salesData.recent_orders||[]).map(o => {
     const date = o.ordered_at ? new Date(o.ordered_at).toLocaleDateString() : '—';
     return `<div class="sale-row">
       <div>
         <div class="sale-date">${date}</div>
-        <div style="font-size:12px;color:var(--mu)">${o.channel_label||'—'}</div>
+        <div style="font-size:12px;color:var(--mu)">${o.channel||'—'}</div>
       </div>
       <div style="text-align:right">
-        <div class="sale-qty">×${item.quantity}</div>
-        <div class="sale-price">$${parseFloat(item.unit_price||0).toFixed(2)}</div>
+        <div class="sale-qty">×${o.quantity||0}</div>
+        <div class="sale-price">$${parseFloat(o.unit_price||0).toFixed(2)}</div>
       </div>
     </div>`;
   }).join('');
@@ -378,7 +318,7 @@ async function showProduct(product, searchedUpc){
   const html = `
     <div class="prod-card">
       <div class="sku">${product.sku||'—'}</div>
-      <div class="name">${product.name||product.title||'Unnamed Product'}</div>
+      <div class="name">${product.name||'Unnamed Product'}</div>
       ${product.brand ? `<div style="font-size:12px;color:var(--mu);margin-bottom:8px">Brand: <b>${product.brand}</b></div>` : ''}
       <div style="margin-bottom:8px">${product.active ? '<span class="tag active">● Active</span>' : '<span class="tag inactive">● Inactive</span>'}</div>
 
@@ -460,27 +400,20 @@ async function updateInventory(){
   toast('📤 Updating inventory...');
 
   try {
-    // Get warehouse/channel to update
-    const inv = await sbFetch('/inventory?product_id=' + currentProduct.product_id + '&limit=50');
-    if(!inv || !inv.length){
-      toast('⚠️ No inventory channels found');
-      return;
-    }
-
-    // Update first channel (primary warehouse)
-    const channel = inv[0];
-    const payload = {
-      inventory: [{
-        sku: currentProduct.sku,
-        warehouse_uuid: channel.warehouse_uuid,
-        on_hand_quantity: newQty
-      }]
-    };
-
-    await sbFetch('/inventory', {
+    // Use Railway proxy to update inventory
+    const res = await fetch(SB_PROXY + '/sb/update-inventory', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        sku: currentProduct.sku,
+        warehouse_uuid: currentProduct.warehouse_uuid || '',
+        quantity: newQty
+      })
     });
+    const result = await res.json();
+    if(!res.ok || result.status === 'error'){
+      throw new Error(result.error || 'Update failed');
+    }
 
     toast('✅ Inventory updated to ' + newQty + ' units!', 3000);
   } catch(err){
