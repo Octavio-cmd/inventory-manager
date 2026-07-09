@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Inventory">
+  <title>Inventory Manager</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg:#0d0d0d;--sf:#1a1a1a;--sf2:#242424;--bd:#333;
+      --tx:#fff;--mu:#888;--sv:#00e676;--dw:#ff1744;--ac:#ff6b00;--gd:#ffab00;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;overflow-x:hidden}
+    .hdr{background:var(--sf);border-bottom:1px solid var(--bd);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+    .hdr-logo{display:flex;align-items:center;gap:10px}
+    .hdr-logo img{width:32px;height:32px;border-radius:8px}
+    .hdr-title{font-size:18px;font-weight:800;color:var(--tx)}
+    .hdr-title span{color:var(--ac)}
+    .hdr-back{background:none;border:none;color:var(--mu);font-size:14px;cursor:pointer;padding:6px}
+
+    .scr{display:none;min-height:calc(100vh - 57px);padding:16px}
+    .scr.on{display:block}
+
+    /* HOME */
+    .scan-card{background:var(--sf);border:2px solid var(--ac);border-radius:16px;padding:24px;text-align:center;margin-bottom:16px;cursor:pointer;active:opacity:.8}
+    .scan-card .icon{font-size:48px;margin-bottom:12px}
+    .scan-card h2{font-size:20px;font-weight:800;margin-bottom:6px}
+    .scan-card p{font-size:13px;color:var(--mu)}
+
+    /* SCANNER */
+    #reader{width:100%;border-radius:12px;overflow:hidden;margin-bottom:16px}
+    .upc-manual{display:flex;gap:8px;margin-bottom:16px}
+    .upc-manual input{flex:1;background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px;color:var(--tx);font-size:16px}
+    .upc-manual input::placeholder{color:var(--mu)}
+    .btn{background:var(--ac);border:none;border-radius:10px;padding:12px 20px;color:#fff;font-weight:800;font-size:15px;cursor:pointer;width:100%;margin-bottom:10px}
+    .btn.sec{background:var(--sf);border:1px solid var(--bd);color:var(--mu)}
+    .btn.grn{background:var(--sv);color:#000}
+    .btn.red{background:var(--dw)}
+
+    /* PRODUCT CARD */
+    .prod-card{background:var(--sf);border-radius:16px;padding:16px;margin-bottom:12px}
+    .prod-card .sku{font-size:11px;color:var(--ac);font-weight:700;letter-spacing:.5px;margin-bottom:4px}
+    .prod-card .name{font-size:16px;font-weight:800;margin-bottom:12px;line-height:1.3}
+    .prod-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+    .stat-box{background:var(--sf2);border-radius:10px;padding:10px;text-align:center}
+    .stat-box .val{font-size:22px;font-weight:800}
+    .stat-box .lbl{font-size:10px;color:var(--mu);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+    .stat-box.green .val{color:var(--sv)}
+    .stat-box.orange .val{color:var(--ac)}
+    .stat-box.red .val{color:var(--dw)}
+    .stat-box.gold .val{color:var(--gd)}
+
+    /* QTY EDITOR */
+    .qty-editor{background:var(--sf2);border-radius:12px;padding:16px;margin-bottom:12px}
+    .qty-editor label{font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px}
+    .qty-row{display:flex;align-items:center;gap:12px}
+    .qty-btn{background:var(--sf);border:1px solid var(--bd);border-radius:8px;width:44px;height:44px;font-size:22px;color:var(--tx);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .qty-input{flex:1;background:var(--sf);border:1px solid var(--ac);border-radius:8px;padding:10px;color:var(--tx);font-size:24px;font-weight:800;text-align:center}
+
+    /* SALES HISTORY */
+    .section-title{font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:700}
+    .sale-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bd)}
+    .sale-row:last-child{border-bottom:none}
+    .sale-date{font-size:12px;color:var(--mu)}
+    .sale-qty{font-size:14px;font-weight:700;color:var(--sv)}
+    .sale-price{font-size:14px;font-weight:700;color:var(--gd)}
+
+    /* LISTING INFO */
+    .listing-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd);font-size:13px}
+    .listing-row:last-child{border-bottom:none}
+    .listing-row .key{color:var(--mu)}
+    .listing-row .val{font-weight:700;text-align:right}
+
+    /* TOAST */
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+    #toast.on{opacity:1}
+
+    /* LOADING */
+    .loader{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;gap:12px}
+    .sp{width:36px;height:36px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loader p{color:var(--mu);font-size:14px}
+
+    /* EMPTY STATE */
+    .empty{text-align:center;padding:40px 20px}
+    .empty .icon{font-size:48px;margin-bottom:12px}
+    .empty p{color:var(--mu);font-size:14px}
+
+    /* CHANNEL BADGE */
+    .channel-badge{display:inline-block;background:var(--sf2);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--mu);margin-right:4px;margin-bottom:4px}
+    .channel-badge.ebay{color:#86b817}
+    .channel-badge.shopify{color:#96bf48}
+
+    .tag{display:inline-block;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-right:4px}
+    .tag.active{background:rgba(0,230,118,.15);color:var(--sv)}
+    .tag.inactive{background:rgba(255,23,68,.15);color:var(--dw)}
+  </style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-logo">
+    <img src="https://octavio-cmd.github.io/savvy-home/icon.png" onerror="this.style.display='none'">
+    <div class="hdr-title"><span>Savvy</span> Inventory</div>
+  </div>
+  <button class="hdr-back" onclick="goHome()" ontouchend="event.preventDefault();goHome()">🏠 Home</button>
+</div>
+
+<!-- HOME SCREEN -->
+<div class="scr on" id="scr-home">
+  <div style="padding:8px 0 16px">
+    <div style="font-size:22px;font-weight:800">Inventory Manager</div>
+    <div style="font-size:13px;color:var(--mu);margin-top:4px">Search by UPC or SKU in Sellbrite</div>
+  </div>
+
+  <div class="scan-card" onclick="openScanner()" ontouchend="event.preventDefault();openScanner()">
+    <div class="icon">📷</div>
+    <h2>Scan Barcode</h2>
+    <p>Point camera at UPC barcode</p>
+  </div>
+
+  <div style="font-size:12px;color:var(--mu);text-align:center;margin:12px 0">— or type manually —</div>
+
+  <div class="upc-manual">
+    <input type="number" id="manualUpc" placeholder="Enter UPC or SKU..." inputmode="numeric">
+    <button class="btn" style="width:auto;padding:12px 16px" onclick="searchManual()" ontouchend="event.preventDefault();searchManual()">🔍</button>
+  </div>
+
+  <div id="recent-searches" style="margin-top:8px"></div>
+</div>
+
+<!-- SCANNER SCREEN -->
+<div class="scr" id="scr-scan">
+  <button class="btn sec" style="margin-bottom:12px" onclick="showScreen('scr-home')" ontouchend="event.preventDefault();showScreen('scr-home')">← Back</button>
+  <div id="reader"></div>
+  <div class="upc-manual">
+    <input type="number" id="scanUpc" placeholder="Or type UPC here..." inputmode="numeric">
+    <button class="btn" style="width:auto;padding:12px 16px" onclick="searchFromScan()" ontouchend="event.preventDefault();searchFromScan()">🔍</button>
+  </div>
+</div>
+
+<!-- LOADING SCREEN -->
+<div class="scr" id="scr-load">
+  <div class="loader">
+    <div class="sp"></div>
+    <p id="load-msg">Searching Sellbrite...</p>
+  </div>
+</div>
+
+<!-- RESULTS SCREEN -->
+<div class="scr" id="scr-result">
+  <button class="btn sec" style="margin-bottom:12px" onclick="showScreen('scr-home')" ontouchend="event.preventDefault();showScreen('scr-home')">← New Search</button>
+  <div id="result-content"></div>
+</div>
+
+<!-- NOT FOUND SCREEN -->
+<div class="scr" id="scr-notfound">
+  <button class="btn sec" style="margin-bottom:12px" onclick="showScreen('scr-home')" ontouchend="event.preventDefault();showScreen('scr-home')">← Back</button>
+  <div class="empty">
+    <div class="icon">🔍</div>
+    <h2 style="margin-bottom:8px">Not Found</h2>
+    <p id="notfound-msg">No product found with that UPC in Sellbrite</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────
+const SAVVY_CONFIG = 'https://savvy-config-production.up.railway.app';
+const SELLBRITE_API = 'https://api.sellbrite.com/v1';
+
+let SB_TOKEN = '4729d1df-4b2f-43bf-a36b-bef628805133';
+let SB_SECRET = 'e176afbdddea29670a8cf3ff4356c475';
+let scanner = null;
+let currentProduct = null;
+let _tt = null;
+
+// ── UTILS ───────────────────────────────────────────────────
+function $(id){ return document.getElementById(id); }
+
+function toast(msg, ms=2600){
+  const t=$('toast');
+  t.textContent=msg;
+  t.classList.add('on');
+  clearTimeout(_tt);
+  _tt=setTimeout(()=>t.classList.remove('on'),ms);
+}
+
+function showScreen(id){
+  document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on'));
+  $(id).classList.add('on');
+}
+
+function goHome(){
+  window.location.href='https://octavio-cmd.github.io/savvy-home/';
+}
+
+// ── AUTH ─────────────────────────────────────────────────────
+function sbAuth(){
+  return 'Basic ' + btoa(SB_TOKEN + ':' + SB_SECRET);
+}
+
+// ── RAILWAY CONFIG ───────────────────────────────────────────
+(async function loadConfig(){
+  try {
+    const r = await fetch(SAVVY_CONFIG + '/config');
+    if(r.ok){
+      const d = await r.json();
+      if(d.sellbrite_token) SB_TOKEN = d.sellbrite_token;
+      if(d.sellbrite_secret) SB_SECRET = d.sellbrite_secret;
+    }
+  } catch(e){ console.warn('Config load failed, using defaults'); }
+})();
+
+// ── SCANNER ──────────────────────────────────────────────────
+function openScanner(){
+  showScreen('scr-scan');
+  if(scanner) return;
+  scanner = new Html5Qrcode('reader');
+  scanner.start(
+    {facingMode:'environment'},
+    {fps:15, qrbox:{width:280,height:100}},
+    (decodedText) => {
+      stopScanner();
+      searchUPC(decodedText.trim());
+    },
+    () => {}
+  ).catch(err=>{
+    toast('Camera error: ' + err);
+  });
+}
+
+function stopScanner(){
+  if(scanner){
+    scanner.stop().catch(()=>{});
+    scanner = null;
+  }
+}
+
+function searchFromScan(){
+  const v = $('scanUpc').value.trim();
+  if(!v){ toast('⚠️ Enter a UPC'); return; }
+  stopScanner();
+  searchUPC(v);
+}
+
+function searchManual(){
+  const v = $('manualUpc').value.trim();
+  if(!v){ toast('⚠️ Enter a UPC or SKU'); return; }
+  searchUPC(v);
+}
+
+// ── SEARCH SELLBRITE ─────────────────────────────────────────
+async function searchUPC(upc){
+  showScreen('scr-load');
+  $('load-msg').textContent = 'Searching Sellbrite for UPC: ' + upc + '...';
+
+  try {
+    // Strategy: search products where SKU contains the UPC
+    // Sellbrite SKU format: BRD-UPC-PACK e.g. NIK-012345678901-1PK
+    const products = await sbFetch('/products?limit=100');
+
+    if(!products || !products.length){
+      showNotFound('No products found in Sellbrite');
+      return;
+    }
+
+    // Find product whose SKU contains the UPC
+    const upcClean = upc.replace(/\D/g,'');
+    const match = products.find(p => {
+      const sku = (p.sku || '').toUpperCase();
+      return sku.includes(upcClean) || (p.upc || '').replace(/\D/g,'') === upcClean;
+    });
+
+    if(!match){
+      // Try searching by UPC field directly
+      const byUpc = await sbFetch('/products?upc=' + upcClean + '&limit=10');
+      if(byUpc && byUpc.length){
+        await showProduct(byUpc[0], upc);
+        return;
+      }
+      showNotFound('No product found with UPC: ' + upc + '\n\nMake sure the UPC is part of your SKU (e.g. NIK-' + upcClean + '-1PK)');
+      return;
+    }
+
+    await showProduct(match, upc);
+
+  } catch(err){
+    console.error('Search error:', err);
+    toast('❌ Error: ' + (err.message || err));
+    showScreen('scr-home');
+  }
+}
+
+// ── SELLBRITE API FETCH ──────────────────────────────────────
+async function sbFetch(path, options={}){
+  const url = SELLBRITE_API + path;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Authorization': sbAuth(),
+      'Content-Type': 'application/json',
+      ...(options.headers||{})
+    }
+  });
+
+  if(!res.ok){
+    if(res.status === 401) throw new Error('Invalid Sellbrite credentials');
+    if(res.status === 404) return null;
+    throw new Error('Sellbrite API error: ' + res.status);
+  }
+
+  return res.json();
+}
+
+// ── SHOW PRODUCT ─────────────────────────────────────────────
+async function showProduct(product, searchedUpc){
+  currentProduct = product;
+
+  $('load-msg').textContent = 'Loading inventory & sales...';
+
+  // Get inventory levels
+  let inventory = [];
+  try {
+    const inv = await sbFetch('/inventory?product_id=' + product.product_id + '&limit=50');
+    inventory = inv || [];
+  } catch(e){ console.warn('Inventory fetch failed', e); }
+
+  // Get order history for this SKU
+  let orders = [];
+  try {
+    const ord = await sbFetch('/orders?sku=' + encodeURIComponent(product.sku) + '&limit=50&order=created_at+desc');
+    orders = ord || [];
+  } catch(e){ console.warn('Orders fetch failed', e); }
+
+  // Calculate stats
+  const totalQty = inventory.reduce((sum, inv) => sum + (inv.available_quantity||0), 0);
+  const totalSold = orders.reduce((sum, o) => {
+    const item = (o.items||[]).find(i => i.sku === product.sku);
+    return sum + (item ? item.quantity : 0);
+  }, 0);
+  const totalRevenue = orders.reduce((sum, o) => {
+    const item = (o.items||[]).find(i => i.sku === product.sku);
+    return sum + (item ? parseFloat(item.unit_price||0) * (item.quantity||0) : 0);
+  }, 0);
+
+  // Days listed
+  const createdAt = product.created_at ? new Date(product.created_at) : null;
+  const daysListed = createdAt ? Math.floor((Date.now() - createdAt)/86400000) : null;
+
+  // Build HTML
+  const channels = inventory.map(inv => {
+    const ch = (inv.channel_name||'').toLowerCase();
+    return `<span class="channel-badge ${ch.includes('ebay')?'ebay':ch.includes('shopify')?'shopify':''}">${inv.channel_name||'Unknown'}: ${inv.available_quantity||0}</span>`;
+  }).join('');
+
+  const salesRows = orders.slice(0,10).map(o => {
+    const item = (o.items||[]).find(i=>i.sku===product.sku);
+    if(!item) return '';
+    const date = o.ordered_at ? new Date(o.ordered_at).toLocaleDateString() : '—';
+    return `<div class="sale-row">
+      <div>
+        <div class="sale-date">${date}</div>
+        <div style="font-size:12px;color:var(--mu)">${o.channel_label||'—'}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="sale-qty">×${item.quantity}</div>
+        <div class="sale-price">$${parseFloat(item.unit_price||0).toFixed(2)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const html = `
+    <div class="prod-card">
+      <div class="sku">${product.sku||'—'}</div>
+      <div class="name">${product.name||product.title||'Unnamed Product'}</div>
+      ${product.brand ? `<div style="font-size:12px;color:var(--mu);margin-bottom:8px">Brand: <b>${product.brand}</b></div>` : ''}
+      <div style="margin-bottom:8px">${product.active ? '<span class="tag active">● Active</span>' : '<span class="tag inactive">● Inactive</span>'}</div>
+
+      <div class="prod-stats">
+        <div class="stat-box ${totalQty>5?'green':totalQty>0?'orange':'red'}">
+          <div class="val">${totalQty}</div>
+          <div class="lbl">In Stock</div>
+        </div>
+        <div class="stat-box gold">
+          <div class="val">${totalSold}</div>
+          <div class="lbl">Sold</div>
+        </div>
+        <div class="stat-box">
+          <div class="val">$${totalRevenue.toFixed(0)}</div>
+          <div class="lbl">Revenue</div>
+        </div>
+        <div class="stat-box">
+          <div class="val">${daysListed !== null ? daysListed : '—'}</div>
+          <div class="lbl">Days Listed</div>
+        </div>
+      </div>
+
+      ${channels ? `<div style="margin-bottom:4px">${channels}</div>` : ''}
+    </div>
+
+    <div class="prod-card">
+      <div class="section-title">📦 Update Stock</div>
+      <div class="qty-editor">
+        <label>New Quantity</label>
+        <div class="qty-row">
+          <button class="qty-btn" ontouchend="event.preventDefault();changeQty(-1)" onclick="changeQty(-1)">−</button>
+          <input type="number" class="qty-input" id="qty-input" value="${totalQty}" inputmode="numeric">
+          <button class="qty-btn" ontouchend="event.preventDefault();changeQty(1)" onclick="changeQty(1)">+</button>
+        </div>
+      </div>
+      <button class="btn grn" onclick="updateInventory()" ontouchend="event.preventDefault();updateInventory()">✅ Update Inventory</button>
+    </div>
+
+    <div class="prod-card">
+      <div class="section-title">📋 Listing Details</div>
+      <div class="listing-row"><span class="key">UPC</span><span class="val">${product.upc||searchedUpc||'—'}</span></div>
+      <div class="listing-row"><span class="key">Price</span><span class="val">${product.price ? '$'+parseFloat(product.price).toFixed(2) : '—'}</span></div>
+      <div class="listing-row"><span class="key">Condition</span><span class="val">${product.condition||'—'}</span></div>
+      <div class="listing-row"><span class="key">Listed Since</span><span class="val">${createdAt ? createdAt.toLocaleDateString() : '—'}</span></div>
+      <div class="listing-row"><span class="key">Last Updated</span><span class="val">${product.updated_at ? new Date(product.updated_at).toLocaleDateString() : '—'}</span></div>
+    </div>
+
+    ${orders.length > 0 ? `
+    <div class="prod-card">
+      <div class="section-title">📈 Recent Sales (last ${Math.min(orders.length,10)})</div>
+      ${salesRows}
+    </div>` : `
+    <div class="prod-card">
+      <div class="empty" style="padding:20px">
+        <div class="icon" style="font-size:32px">📊</div>
+        <p>No sales history found</p>
+      </div>
+    </div>`}
+  `;
+
+  $('result-content').innerHTML = html;
+  showScreen('scr-result');
+  saveRecentSearch(product.sku, product.name||product.title, searchedUpc);
+}
+
+// ── QTY CONTROLS ─────────────────────────────────────────────
+function changeQty(delta){
+  const input = $('qty-input');
+  if(!input) return;
+  const val = parseInt(input.value||'0') + delta;
+  input.value = Math.max(0, val);
+}
+
+// ── UPDATE INVENTORY ─────────────────────────────────────────
+async function updateInventory(){
+  const newQty = parseInt($('qty-input').value||'0');
+  if(!currentProduct){ toast('⚠️ No product loaded'); return; }
+
+  toast('📤 Updating inventory...');
+
+  try {
+    // Get warehouse/channel to update
+    const inv = await sbFetch('/inventory?product_id=' + currentProduct.product_id + '&limit=50');
+    if(!inv || !inv.length){
+      toast('⚠️ No inventory channels found');
+      return;
+    }
+
+    // Update first channel (primary warehouse)
+    const channel = inv[0];
+    const payload = {
+      inventory: [{
+        sku: currentProduct.sku,
+        warehouse_uuid: channel.warehouse_uuid,
+        on_hand_quantity: newQty
+      }]
+    };
+
+    await sbFetch('/inventory', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    toast('✅ Inventory updated to ' + newQty + ' units!', 3000);
+  } catch(err){
+    console.error('Update error:', err);
+    toast('❌ Update failed: ' + (err.message||err));
+  }
+}
+
+// ── NOT FOUND ────────────────────────────────────────────────
+function showNotFound(msg){
+  $('notfound-msg').textContent = msg || 'No product found';
+  showScreen('scr-notfound');
+}
+
+// ── RECENT SEARCHES ──────────────────────────────────────────
+function saveRecentSearch(sku, name, upc){
+  let recent = JSON.parse(localStorage.getItem('inv_recent')||'[]');
+  recent = recent.filter(r => r.sku !== sku);
+  recent.unshift({sku, name, upc, ts: Date.now()});
+  recent = recent.slice(0,5);
+  localStorage.setItem('inv_recent', JSON.stringify(recent));
+  renderRecent();
+}
+
+function renderRecent(){
+  const recent = JSON.parse(localStorage.getItem('inv_recent')||'[]');
+  const el = $('recent-searches');
+  if(!recent.length){ el.innerHTML=''; return; }
+  el.innerHTML = `
+    <div class="section-title" style="margin-bottom:8px">Recent Searches</div>
+    ${recent.map(r=>`
+      <div class="prod-card" style="padding:12px;cursor:pointer" onclick="searchUPC('${r.upc||r.sku}')" ontouchend="event.preventDefault();searchUPC('${r.upc||r.sku}')">
+        <div style="font-size:11px;color:var(--ac);font-weight:700">${r.sku}</div>
+        <div style="font-size:14px;font-weight:600;margin-top:2px">${r.name||'—'}</div>
+      </div>
+    `).join('')}
+  `;
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+window.addEventListener('load', function(){
+  renderRecent();
+  $('manualUpc').addEventListener('keydown', e=>{ if(e.key==='Enter') searchManual(); });
+  $('scanUpc').addEventListener('keydown', e=>{ if(e.key==='Enter') searchFromScan(); });
+});
+</script>
+</body>
+</html>
