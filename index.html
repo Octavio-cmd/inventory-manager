@@ -297,16 +297,10 @@ async function showProductFromProxy(data, searchedUpc){
     const totalQty = inv.total_quantity || 0;
     const totalOnHand = inv.total_on_hand || 0;
     const wh = (inv.channels||[])[0]?.warehouse_uuid || '';
-    const safeSku = (p.sku||('sku'+idx));
     const inputId = 'qty-' + idx;
 
     // Guardar en memoria para updateInventory
     window.loadedProducts[idx] = { sku: p.sku, warehouse_uuid: wh, inputId };
-
-    const channels = (inv.channels||[]).map(c => {
-      const ch = (c.channel_name||'').toLowerCase();
-      return `<span class="channel-badge ${ch.includes('ebay')?'ebay':ch.includes('shopify')?'shopify':''}">${c.channel_name||'Almacén'}: ${c.available||0}</span>`;
-    }).join('');
 
     return `
     <div class="prod-card">
@@ -328,8 +322,6 @@ async function showProductFromProxy(data, searchedUpc){
           <div class="lbl">On Hand</div>
         </div>
       </div>
-
-      ${channels ? `<div style="margin-bottom:12px">${channels}</div>` : ''}
 
       <div class="qty-editor">
         <label>Nueva cantidad (On Hand)</label>
