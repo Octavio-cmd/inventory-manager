@@ -280,29 +280,43 @@ async function sbFetch(path, options={}){
 
 // ── SHOW PRODUCT FROM PROXY ─────────────────────────────────
 async function showProductFromProxy(data, searchedUpc){
-  const product = data.product;
-  const invData = data.inventory || {};
+  // El backend ahora devuelve una LISTA de paquetes (data.products).
+  // Soportamos también el formato antiguo (data.product) por si acaso.
+  let products = data.products;
+  if(!products && data.product){ products = [ {...data.product, inventory: data.inventory} ]; }
+  products = products || [];
 
-  currentProduct = {
-    sku: product.sku,
-    product_id: product.product_id,
-    warehouse_uuid: (invData.channels||[])[0]?.warehouse_uuid || ''
-  };
+  // Guardar todos los productos en memoria para el update por SKU
+  window.loadedProducts = {};
 
-  const totalQty = invData.total_quantity || 0;
-  const totalOnHand = invData.total_on_hand || 0;
+  const upcShown = data.upc || searchedUpc || '';
+  const count = products.length;
 
-  const channels = (invData.channels||[]).map(inv => {
-    const ch = (inv.channel_name||'').toLowerCase();
-    return `<span class="channel-badge ${ch.includes('ebay')?'ebay':ch.includes('shopify')?'shopify':''}">${inv.channel_name||'Almacén'}: ${inv.available||0}</span>`;
-  }).join('');
+  let cards = products.map((p, idx) => {
+    const inv = p.inventory || {};
+    const totalQty = inv.total_quantity || 0;
+    const totalOnHand = inv.total_on_hand || 0;
+    const wh = (inv.channels||[])[0]?.warehouse_uuid || '';
+    const safeSku = (p.sku||('sku'+idx));
+    const inputId = 'qty-' + idx;
 
-  const html = `
+    // Guardar en memoria para updateInventory
+    window.loadedProducts[idx] = { sku: p.sku, warehouse_uuid: wh, inputId };
+
+    const channels = (inv.channels||[]).map(c => {
+      const ch = (c.channel_name||'').toLowerCase();
+      return `<span class="channel-badge ${ch.includes('ebay')?'ebay':ch.includes('shopify')?'shopify':''}">${c.channel_name||'Almacén'}: ${c.available||0}</span>`;
+    }).join('');
+
+    return `
     <div class="prod-card">
-      <div class="sku">${product.sku||'—'}</div>
-      <div class="name">${product.name||'Unnamed Product'}</div>
-      ${product.brand ? `<div style="font-size:12px;color:var(--mu);margin-bottom:8px">Brand: <b>${product.brand}</b></div>` : ''}
-      <div style="margin-bottom:8px">${product.active ? '<span class="tag active">● Active</span>' : '<span class="tag inactive">● Inactive</span>'}</div>
+      <div class="sku">${p.sku||'—'}</div>
+      <div class="name">${p.name||'Unnamed Product'}</div>
+      ${p.brand ? `<div style="font-size:12px;color:var(--mu);margin-bottom:8px">Brand: <b>${p.brand}</b></div>` : ''}
+      <div style="margin-bottom:8px">
+        ${p.active ? '<span class="tag active">● Active</span>' : '<span class="tag inactive">● Inactive</span>'}
+        ${p.price ? `<span class="tag" style="background:var(--sf2);color:var(--gd);margin-left:6px">$${parseFloat(p.price).toFixed(2)}</span>` : ''}
+      </div>
 
       <div class="prod-stats">
         <div class="stat-box ${totalQty>5?'green':totalQty>0?'orange':'red'}">
@@ -315,58 +329,57 @@ async function showProductFromProxy(data, searchedUpc){
         </div>
       </div>
 
-      ${channels ? `<div style="margin-bottom:4px">${channels}</div>` : ''}
-    </div>
+      ${channels ? `<div style="margin-bottom:12px">${channels}</div>` : ''}
 
-    <div class="prod-card">
-      <div class="section-title">📦 Update Stock</div>
       <div class="qty-editor">
-        <label>New Quantity</label>
+        <label>Nueva cantidad (On Hand)</label>
         <div class="qty-row">
-          <button class="qty-btn" ontouchend="event.preventDefault();changeQty(-1)" onclick="changeQty(-1)">−</button>
-          <input type="number" class="qty-input" id="qty-input" value="${totalQty}" inputmode="numeric">
-          <button class="qty-btn" ontouchend="event.preventDefault();changeQty(1)" onclick="changeQty(1)">+</button>
+          <button class="qty-btn" ontouchend="event.preventDefault();changeQty('${inputId}',-1)" onclick="changeQty('${inputId}',-1)">−</button>
+          <input type="number" class="qty-input" id="${inputId}" value="${totalOnHand}" inputmode="numeric">
+          <button class="qty-btn" ontouchend="event.preventDefault();changeQty('${inputId}',1)" onclick="changeQty('${inputId}',1)">+</button>
         </div>
       </div>
-      <button class="btn grn" onclick="updateInventory()" ontouchend="event.preventDefault();updateInventory()">✅ Update Inventory</button>
-    </div>
+      <button class="btn grn" onclick="updateInventory(${idx})" ontouchend="event.preventDefault();updateInventory(${idx})">✅ Actualizar este paquete</button>
+    </div>`;
+  }).join('');
 
-    <div class="prod-card">
-      <div class="section-title">📋 Listing Details</div>
-      <div class="listing-row"><span class="key">UPC</span><span class="val">${product.upc||searchedUpc||'—'}</span></div>
-      <div class="listing-row"><span class="key">Price</span><span class="val">${product.price ? '$'+parseFloat(product.price).toFixed(2) : '—'}</span></div>
-      <div class="listing-row"><span class="key">Condition</span><span class="val">${product.condition||'—'}</span></div>
-    </div>
-  `;
+  const header = count > 1
+    ? `<div class="prod-card" style="text-align:center;padding:14px">
+         <div style="font-size:14px;color:var(--mu)">UPC ${upcShown}</div>
+         <div style="font-size:18px;font-weight:800;color:var(--ac)">${count} paquetes encontrados</div>
+         <div style="font-size:12px;color:var(--mu)">Elige a cuál agregar inventario</div>
+       </div>`
+    : '';
 
-  $('result-content').innerHTML = html;
+  $('result-content').innerHTML = header + cards;
   showScreen('scr-result');
-  saveRecentSearch(product.sku, product.name||product.title, searchedUpc);
+  if(products[0]){ saveRecentSearch(products[0].sku, products[0].name, upcShown); }
 }
 
 // ── QTY CONTROLS ─────────────────────────────────────────────
-function changeQty(delta){
-  const input = $('qty-input');
+function changeQty(inputId, delta){
+  const input = document.getElementById(inputId);
   if(!input) return;
   const val = parseInt(input.value||'0') + delta;
   input.value = Math.max(0, val);
 }
 
 // ── UPDATE INVENTORY ─────────────────────────────────────────
-async function updateInventory(){
-  const newQty = parseInt($('qty-input').value||'0');
-  if(!currentProduct){ toast('⚠️ No product loaded'); return; }
+async function updateInventory(idx){
+  const p = (window.loadedProducts||{})[idx];
+  if(!p){ toast('⚠️ No se cargó el producto'); return; }
+  const input = document.getElementById(p.inputId);
+  const newQty = parseInt((input && input.value) || '0');
 
-  toast('📤 Updating inventory...');
+  toast('📤 Actualizando inventario...');
 
   try {
-    // Use Railway proxy to update inventory
     const res = await fetch(SB_PROXY + '/sb/update-inventory', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        sku: currentProduct.sku,
-        warehouse_uuid: currentProduct.warehouse_uuid || '',
+        sku: p.sku,
+        warehouse_uuid: p.warehouse_uuid || '',
         quantity: newQty
       })
     });
@@ -374,11 +387,10 @@ async function updateInventory(){
     if(!res.ok || result.status === 'error'){
       throw new Error(result.error || 'Update failed');
     }
-
-    toast('✅ Inventory updated to ' + newQty + ' units!', 3000);
+    toast('✅ ' + p.sku + ' actualizado a ' + newQty + ' unidades', 3000);
   } catch(err){
     console.error('Update error:', err);
-    toast('❌ Update failed: ' + (err.message||err));
+    toast('❌ Error al actualizar: ' + (err.message||err));
   }
 }
 
