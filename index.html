@@ -57,9 +57,9 @@
     /* QTY EDITOR */
     .qty-editor{background:var(--sf2);border-radius:12px;padding:16px;margin-bottom:12px}
     .qty-editor label{font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px}
-    .qty-row{display:flex;align-items:center;gap:12px}
+    .qty-row{display:flex;align-items:center;gap:12px;width:100%}
     .qty-btn{background:var(--sf);border:1px solid var(--bd);border-radius:8px;width:44px;height:44px;font-size:22px;color:var(--tx);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .qty-input{flex:1;background:var(--sf);border:1px solid var(--ac);border-radius:8px;padding:10px;color:var(--tx);font-size:24px;font-weight:800;text-align:center}
+    .qty-input{flex:1 1 0;min-width:0;box-sizing:border-box;background:var(--sf);border:1px solid var(--ac);border-radius:8px;padding:10px;color:var(--tx);font-size:24px;font-weight:800;text-align:center;-webkit-appearance:none;margin:0}
 
     /* SALES HISTORY */
     .section-title{font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:700}
@@ -291,8 +291,6 @@ async function showProductFromProxy(data, searchedUpc){
 
   const totalQty = invData.total_quantity || 0;
   const totalOnHand = invData.total_on_hand || 0;
-  const daysListed = product.days_listed;
-  const createdAt = product.created_at ? new Date(product.created_at) : null;
 
   const channels = (invData.channels||[]).map(inv => {
     const ch = (inv.channel_name||'').toLowerCase();
@@ -314,10 +312,6 @@ async function showProductFromProxy(data, searchedUpc){
         <div class="stat-box">
           <div class="val">${totalOnHand}</div>
           <div class="lbl">On Hand</div>
-        </div>
-        <div class="stat-box">
-          <div class="val">${daysListed !== null && daysListed !== undefined ? daysListed : '—'}</div>
-          <div class="lbl">Days Listed</div>
         </div>
       </div>
 
@@ -342,8 +336,6 @@ async function showProductFromProxy(data, searchedUpc){
       <div class="listing-row"><span class="key">UPC</span><span class="val">${product.upc||searchedUpc||'—'}</span></div>
       <div class="listing-row"><span class="key">Price</span><span class="val">${product.price ? '$'+parseFloat(product.price).toFixed(2) : '—'}</span></div>
       <div class="listing-row"><span class="key">Condition</span><span class="val">${product.condition||'—'}</span></div>
-      <div class="listing-row"><span class="key">Listed Since</span><span class="val">${createdAt ? createdAt.toLocaleDateString() : '—'}</span></div>
-      <div class="listing-row"><span class="key">Last Updated</span><span class="val">${product.updated_at ? new Date(product.updated_at).toLocaleDateString() : '—'}</span></div>
     </div>
   `;
 
