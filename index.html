@@ -301,7 +301,8 @@ async function showProductFromProxy(data, searchedUpc){
     return `<span class="channel-badge ${ch.includes('ebay')?'ebay':ch.includes('shopify')?'shopify':''}">${inv.channel_name||'Unknown'}: ${inv.available||0}</span>`;
   }).join('');
 
-  const salesRows = (salesData.recent_orders||[]).map(o => {
+  const orders = salesData.recent_orders || [];
+  const salesRows = orders.map(o => {
     const date = o.ordered_at ? new Date(o.ordered_at).toLocaleDateString() : '—';
     return `<div class="sale-row">
       <div>
