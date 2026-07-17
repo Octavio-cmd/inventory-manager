@@ -341,6 +341,11 @@ async function showProductFromProxy(data, searchedUpc){
         </div>
         <button class="btn" id="ssloc-btn-${idx}" onclick="saveLocation(${idx})" ontouchend="event.preventDefault();saveLocation(${idx})" style="background:var(--sf2);color:var(--tx);width:100%;padding:12px;border-radius:8px;border:1px solid var(--bd);font-weight:700">📍 Guardar ubicación</button>
       </div>
+
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)">
+        <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📅 eBay Listing Info</div>
+        <div id="ebay-dates-${idx}" style="font-size:13px;color:var(--mu)">Consultando eBay...</div>
+      </div>
     </div>`;
   }).join('');
 
@@ -357,7 +362,10 @@ async function showProductFromProxy(data, searchedUpc){
   if(products[0]){ saveRecentSearch(products[0].sku, products[0].name, upcShown); }
 
   // Consultar la ubicación en ShipStation para cada paquete (en segundo plano)
-  products.forEach((p, idx) => { loadLocation(idx, p.sku, p.name, upcShown); });
+  products.forEach((p, idx) => { 
+    loadLocation(idx, p.sku, p.name, upcShown);
+    loadEbayDates(idx, p.sku);
+  });
 }
 
 // ── SHIPSTATION: cargar ubicación ────────────────────────────
@@ -389,6 +397,40 @@ async function loadLocation(idx, sku, name, upc){
     }
   } catch(err){
     statusEl.innerHTML = '<span style="color:var(--mu)">No se pudo consultar ShipStation</span>';
+  }
+}
+
+// ── eBay: cargar fechas de listado ────────────────────────────
+async function loadEbayDates(idx, sku){
+  const datesEl = document.getElementById('ebay-dates-' + idx);
+  if(!datesEl) return;
+
+  try {
+    // Llamar al backend Railway para obtener las fechas de eBay usando el SKU
+    const res = await fetch(SB_PROXY + '/ebay-item-dates?sku=' + encodeURIComponent(sku));
+    const data = await res.json();
+
+    if(data.status === 'error'){
+      datesEl.innerHTML = '<span style="color:var(--mu)">No encontrado en eBay</span>';
+      return;
+    }
+
+    const {listingDate, lastModified, daysListed} = data;
+    let html = '<div class="listing-row">';
+    if(listingDate){
+      html += '<div class="listing-row"><span class="key">Listed on:</span> <span class="val">' + listingDate + '</span></div>';
+    }
+    if(lastModified){
+      html += '<div class="listing-row"><span class="key">Last modified:</span> <span class="val">' + lastModified + '</span></div>';
+    }
+    if(daysListed !== undefined){
+      html += '<div class="listing-row"><span class="key">Days listed:</span> <span class="val" style="color:var(--ac)">' + daysListed + '</span></div>';
+    }
+    html += '</div>';
+    datesEl.innerHTML = html;
+  } catch(err){
+    console.error('loadEbayDates error:', err);
+    datesEl.innerHTML = '<span style="color:var(--mu)">Error fetching eBay info</span>';
   }
 }
 
