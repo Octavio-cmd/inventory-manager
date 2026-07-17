@@ -364,7 +364,7 @@ async function showProductFromProxy(data, searchedUpc){
   // Consultar la ubicación en ShipStation para cada paquete (en segundo plano)
   products.forEach((p, idx) => { 
     loadLocation(idx, p.sku, p.name, upcShown);
-    loadEbayDates(idx, p.sku);
+    loadEbayDates(idx, p.sku, upcShown);
   });
 }
 
@@ -401,32 +401,29 @@ async function loadLocation(idx, sku, name, upc){
 }
 
 // ── eBay: cargar fechas de listado ────────────────────────────
-async function loadEbayDates(idx, sku){
+async function loadEbayDates(idx, sku, upc){
   const datesEl = document.getElementById('ebay-dates-' + idx);
   if(!datesEl) return;
 
   try {
-    // Llamar al backend Railway para obtener las fechas de eBay usando el SKU
-    const res = await fetch(SB_PROXY + '/ebay-item-dates?sku=' + encodeURIComponent(sku));
+    // Buscar por UPC (gtin) + SKU en el backend Railway
+    const qs = 'sku=' + encodeURIComponent(sku) + (upc ? '&upc=' + encodeURIComponent(upc) : '');
+    const res = await fetch(SB_PROXY + '/ebay-item-dates?' + qs);
     const data = await res.json();
 
-    if(data.status === 'error'){
+    if(data.status === 'error' || !data.listingDate){
       datesEl.innerHTML = '<span style="color:var(--mu)">No encontrado en eBay</span>';
       return;
     }
 
-    const {listingDate, lastModified, daysListed} = data;
-    let html = '<div class="listing-row">';
-    if(listingDate){
-      html += '<div class="listing-row"><span class="key">Listed on:</span> <span class="val">' + listingDate + '</span></div>';
+    let html = '';
+    html += '<div class="listing-row"><span class="key">Listed on:</span> <span class="val">' + data.listingDate + '</span></div>';
+    if(data.daysListed !== undefined && data.daysListed !== null){
+      html += '<div class="listing-row"><span class="key">Days listed:</span> <span class="val" style="color:var(--ac)">' + data.daysListed + ' días</span></div>';
     }
-    if(lastModified){
-      html += '<div class="listing-row"><span class="key">Last modified:</span> <span class="val">' + lastModified + '</span></div>';
+    if(data.title){
+      html += '<div style="font-size:11px;color:var(--mu);margin-top:6px;line-height:1.3">🛒 ' + data.title + '</div>';
     }
-    if(daysListed !== undefined){
-      html += '<div class="listing-row"><span class="key">Days listed:</span> <span class="val" style="color:var(--ac)">' + daysListed + '</span></div>';
-    }
-    html += '</div>';
     datesEl.innerHTML = html;
   } catch(err){
     console.error('loadEbayDates error:', err);
