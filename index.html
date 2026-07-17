@@ -342,14 +342,14 @@ async function showProductFromProxy(data, searchedUpc){
         <button class="btn" id="ssloc-btn-${idx}" onclick="saveLocation(${idx})" ontouchend="event.preventDefault();saveLocation(${idx})" style="background:var(--sf2);color:var(--tx);width:100%;padding:12px;border-radius:8px;border:1px solid var(--bd);font-weight:700">📍 Guardar ubicación</button>
       </div>
 
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)">
-        <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📅 eBay Listing Info</div>
-        <div id="ebay-dates-${idx}" style="font-size:13px;color:var(--mu)">Consultando eBay...</div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bd);order:-1">
+        <div style="font-size:14px;color:var(--sv);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:bold">📊 eBay SALES (Last 90 Days)</div>
+        <div id="ebay-sales-${idx}" style="font-size:16px;color:var(--sv);font-weight:bold;line-height:1.8">Consultando ventas...</div>
       </div>
 
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)">
-        <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📊 eBay Sales</div>
-        <div id="ebay-sales-${idx}" style="font-size:13px;color:var(--mu)">Consultando ventas...</div>
+        <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📅 eBay Listing Info</div>
+        <div id="ebay-dates-${idx}" style="font-size:13px;color:var(--mu)">Consultando eBay...</div>
       </div>
     </div>`;
   }).join('');
@@ -450,28 +450,30 @@ async function loadEbaySales(idx, itemId){
     const res = await fetch(SB_PROXY + '/ebay-sales?item_id=' + encodeURIComponent(itemId) + '&days=90');
     const data = await res.json();
 
-    if(data.status === 'error' || data.total_sold === 0){
-      salesEl.innerHTML = '<span style="color:var(--mu)">No sales in last 90 days</span>';
+    if(data.status === 'error' || !data.total_sold || data.total_sold === 0){
+      salesEl.innerHTML = '<span style="color:var(--mu);font-weight:normal">No sales in last 90 days</span>';
       return;
     }
 
     let html = '';
-    html += '<div class="listing-row"><span class="key">Total sold:</span> <span class="val" style="color:var(--sv)">' + data.total_sold + ' órdenes</span></div>';
-    html += '<div class="listing-row"><span class="key">Total qty:</span> <span class="val" style="color:var(--sv)">' + data.total_quantity + ' unidades</span></div>';
+    // Grande y prominente: número de órdenes
+    html += '<div style="font-size:28px;color:var(--sv);font-weight:bold;margin-bottom:6px">' + data.total_sold + ' órdenes</div>';
+    // Subtítulo: unidades totales
+    html += '<div style="font-size:18px;color:var(--ac);font-weight:bold;margin-bottom:10px">' + data.total_quantity + ' unidades vendidas</div>';
     
     if(data.transactions && data.transactions.length > 0){
-      const recent = data.transactions.slice(0, 3);
-      html += '<div style="font-size:11px;color:var(--mu);margin-top:6px">';
-      html += '<strong>Recent:</strong> ';
+      const recent = data.transactions.slice(0, 5);
+      html += '<div style="font-size:12px;color:var(--mu);margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">';
+      html += '<strong>Recent transactions:</strong><br>';
       recent.forEach(function(t, i){
-        html += (i>0 ? ', ' : '') + t.date + ' (' + t.qty + 'x)';
+        html += '  ' + t.date + ': ' + t.qty + 'x<br>';
       });
       html += '</div>';
     }
     salesEl.innerHTML = html;
   } catch(err){
     console.error('loadEbaySales error:', err);
-    salesEl.innerHTML = '<span style="color:var(--mu)">Error fetching sales</span>';
+    salesEl.innerHTML = '<span style="color:var(--mu);font-weight:normal">Error fetching sales</span>';
   }
 }
 
