@@ -99,9 +99,34 @@
     .tag.active{background:rgba(0,230,118,.15);color:var(--sv)}
     .tag.inactive{background:rgba(255,23,68,.15);color:var(--dw)}
 
-    /* SPINNER ANIMATION */
-    .spinner{display:inline-block;width:20px;height:20px;border:3px solid var(--bd);border-top-color:var(--sv);border-radius:50%;animation:spin-rotate 1s linear infinite;margin-right:8px;vertical-align:middle}
-    @keyframes spin-rotate{to{transform:rotate(360deg)}}
+    /* MULTI-LOCATION MODULE */
+    .ssloc-section{margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)}
+    .ssloc-header{font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;font-weight:700}
+    .ssloc-list-container{background:var(--sf2);border-radius:10px;padding:12px;margin-bottom:12px;min-height:40px}
+    .ssloc-list-container div{margin-bottom:8px}
+    .ssloc-list-container div:last-child{margin-bottom:0}
+
+    .loc-modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+                       background:rgba(0,0,0,.9);z-index:9000;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+    .loc-modal-overlay.on{display:flex}
+
+    .loc-modal-content{background:var(--sf);border-radius:16px;width:100%;max-width:90vw;
+                       padding:20px;display:flex;flex-direction:column;gap:16px;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+
+    .loc-modal-section{display:flex;flex-direction:column;gap:10px}
+    .loc-modal-section-title{font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+
+    #loc-modal-qr-reader{width:100%;height:250px;border-radius:8px;overflow:hidden;background:#000}
+
+    .loc-modal-manual-input{width:100%;padding:12px;background:var(--sf2);border:1px solid var(--bd);
+                            border-radius:8px;color:var(--tx);font-size:16px;box-sizing:border-box;text-transform:uppercase}
+
+    .loc-modal-btn{background:var(--ac);border:none;border-radius:8px;padding:12px;color:#fff;
+                   font-weight:800;font-size:14px;cursor:pointer;width:100%}
+    .loc-modal-btn.sec{background:var(--sf2);color:var(--mu);border:1px solid var(--bd)}
+
+    .loc-modal-msg{font-size:12px;color:var(--mu);text-align:center}
+
   </style>
 </head>
 <body>
@@ -317,7 +342,7 @@ async function showProductFromProxy(data, searchedUpc){
       </div>
 
       <div style="margin-bottom:12px;padding:12px;background:var(--sf);border-radius:8px;border:2px solid var(--sv)">
-        <div style="font-size:14px;color:var(--sv);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;font-weight:bold">📊 eBay SALES (Last 90 Days)</div>
+        <div style="font-size:14px;color:var(--sv);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;font-weight:bold">📊 eBay SALES (Last 30 Days)</div>
         <div id="ebay-sales-${idx}" style="font-size:16px;color:var(--sv);font-weight:bold;line-height:1.8;min-height:40px">Consultando ventas...</div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--bd)">
           <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📅 eBay Listing Info</div>
@@ -346,13 +371,18 @@ async function showProductFromProxy(data, searchedUpc){
       </div>
       <button class="btn grn" onclick="updateInventory(${idx})" ontouchend="event.preventDefault();updateInventory(${idx})">✅ Actualizar este paquete</button>
 
-      <div class="ss-loc" id="ssloc-${idx}" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)">
-        <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📍 Ubicación (ShipStation)</div>
-        <div id="ssloc-status-${idx}" style="font-size:13px;color:var(--mu);margin-bottom:8px">Consultando ShipStation...</div>
-        <div class="qty-editor" style="margin-bottom:8px">
-          <input type="text" id="ssloc-input-${idx}" placeholder="Ej: A-12" style="width:100%;box-sizing:border-box;background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:12px;color:var(--tx);font-size:16px" inputmode="text" autocapitalize="characters">
+      <div class="ssloc-section">
+        <div class="ssloc-header">📍 Localizaciones (ShipStation)</div>
+        <div id="ssloc-status-${idx}" style="font-size:13px;color:var(--mu);margin-bottom:12px">Consultando ShipStation...</div>
+        
+        <div id="ssloc-list-${idx}" class="ssloc-list-container">
+          <div style="font-size:12px;color:var(--mu);text-align:center;padding:12px">Sin localizaciones</div>
         </div>
-        <button class="btn" id="ssloc-btn-${idx}" onclick="saveLocation(${idx})" ontouchend="event.preventDefault();saveLocation(${idx})" style="background:var(--sf2);color:var(--tx);width:100%;padding:12px;border-radius:8px;border:1px solid var(--bd);font-weight:700">📍 Guardar ubicación</button>
+        
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="locModalOpen(${idx})" ontouchend="event.preventDefault();locModalOpen(${idx})" style="flex:1">📍 Agregar</button>
+          <button class="btn grn" onclick="saveLocations(${idx})" ontouchend="event.preventDefault();saveLocations(${idx})" style="flex:1">✅ Guardar</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -371,7 +401,7 @@ async function showProductFromProxy(data, searchedUpc){
 
   // Consultar la ubicación en ShipStation para cada paquete (en segundo plano)
   products.forEach((p, idx) => { 
-    loadLocation(idx, p.sku, p.name, upcShown);
+    loadLocationsList(idx, p.sku, p.name, upcShown);
     loadEbayDates(idx, p.sku, upcShown);
   });
 }
@@ -434,54 +464,50 @@ async function loadEbayDates(idx, sku, upc){
     }
     datesEl.innerHTML = html;
     
-    // Cargar ventas usando el UPC (el backend buscará el itemId internamente)
-    loadEbaySales(idx, upc);
+    // Cargar ventas usando el legacy itemId (número real del listing)
+    var salesId = data.legacyItemId || data.itemId;
+    if(salesId){
+      loadEbaySales(idx, salesId);
+    }
   } catch(err){
     console.error('loadEbayDates error:', err);
     datesEl.innerHTML = '<span style="color:var(--mu)">Error fetching eBay info</span>';
   }
 }
 
-// ── eBay: cargar ventas por UPC ────────────────────────────
-async function loadEbaySales(idx, upc){
+// ── eBay: cargar ventas por itemId ────────────────────────────
+async function loadEbaySales(idx, itemId){
   const salesEl = document.getElementById('ebay-sales-' + idx);
   if(!salesEl) return;
-  if(!upc || upc === ''){
-    salesEl.innerHTML = '<span style="color:var(--mu);font-weight:normal">No UPC to search</span>';
-    return;
-  }
-
-  // Mostrar spinner mientras busca
-  salesEl.innerHTML = '<div class="spinner"></div> <span style="color:var(--mu);font-weight:normal">Buscando en eBay...</span>';
 
   try {
-    const res = await fetch(SB_PROXY + '/ebay-sales?upc=' + encodeURIComponent(upc));
+    const res = await fetch(SB_PROXY + '/ebay-sales?item_id=' + encodeURIComponent(itemId) + '&days=90');
     const data = await res.json();
 
-    if(data.status === 'error' || !data.orders || data.orders === 0){
-      salesEl.innerHTML = '<span style="color:var(--mu);font-weight:normal">Sin ventas en los últimos 30 días</span>';
+    if(data.status === 'error' || !data.total_sold || data.total_sold === 0){
+      salesEl.innerHTML = '<span style="color:var(--mu);font-weight:normal">No sales in last 90 days</span>';
       return;
     }
 
     let html = '';
     // Grande y prominente: número de órdenes
-    html += '<div style="font-size:28px;color:var(--sv);font-weight:bold;margin-bottom:6px">' + data.orders + ' órdenes</div>';
+    html += '<div style="font-size:28px;color:var(--sv);font-weight:bold;margin-bottom:6px">' + data.total_sold + ' órdenes</div>';
     // Subtítulo: unidades totales
-    html += '<div style="font-size:18px;color:var(--ac);font-weight:bold;margin-bottom:10px">' + data.units_sold + ' unidades vendidas</div>';
+    html += '<div style="font-size:18px;color:var(--ac);font-weight:bold;margin-bottom:10px">' + data.total_quantity + ' unidades vendidas</div>';
     
     if(data.transactions && data.transactions.length > 0){
       const recent = data.transactions.slice(0, 5);
       html += '<div style="font-size:12px;color:var(--mu);margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">';
-      html += '<strong>Últimas transacciones:</strong><br>';
+      html += '<strong>Recent transactions:</strong><br>';
       recent.forEach(function(t, i){
-        html += '  ' + (t.date || '?') + ': ' + (t.quantity || '?') + 'x<br>';
+        html += '  ' + t.date + ': ' + t.qty + 'x<br>';
       });
       html += '</div>';
     }
     salesEl.innerHTML = html;
   } catch(err){
     console.error('loadEbaySales error:', err);
-    salesEl.innerHTML = '<span style="color:var(--mu);font-weight:normal">Error al obtener ventas</span>';
+    salesEl.innerHTML = '<span style="color:var(--mu);font-weight:normal">Error fetching sales</span>';
   }
 }
 
@@ -592,6 +618,273 @@ window.addEventListener('load', function(){
   $('manualUpc').addEventListener('keydown', e=>{ if(e.key==='Enter') searchManual(); });
   $('scanUpc').addEventListener('keydown', e=>{ if(e.key==='Enter') searchFromScan(); });
 });
+// ═════════════════════════════════════════════════════════════════════════════
+// MULTI-LOCATION MODULE para Inventory Manager
+// Permite agregar N localizaciones por producto (array) en lugar de solo 1
+// Soporta: QR scan + entrada manual, lista visual, borrar individual, guardar a ShipStation
+// ═════════════════════════════════════════════════════════════════════════════
+
+let _locModalOpen = false;
+let _locModalTarget = null;  // idx del producto
+let _locModalQRScanner = null;
+
+// ──────────────────────────────────────────────────────────────────────────
+// ABRIR MODAL DE LOCALIZACIÓN (QR + manual)
+// ──────────────────────────────────────────────────────────────────────────
+async function locModalOpen(idx) {
+  _locModalTarget = idx;
+  _locModalOpen = true;
+  const overlay = document.getElementById('loc-modal-overlay');
+  if(!overlay) return;
+  
+  overlay.style.display = 'flex';
+  
+  // Iniciar QR scanner
+  if(!_locModalQRScanner){
+    try {
+      _locModalQRScanner = new Html5Qrcode('loc-modal-qr-reader');
+      _locModalQRScanner.start(
+        {facingMode: 'environment'},
+        {fps: 15, qrbox: {width: 250, height: 100}},
+        (decodedText) => {
+          locModalQRCapture(decodedText.trim());
+        },
+        () => {}
+      );
+    } catch(e){
+      console.warn('Could not start QR scanner:', e);
+      const msg = document.getElementById('loc-modal-qr-msg');
+      if(msg) msg.textContent = '⚠️ Camera error. Use manual input below.';
+    }
+  }
+}
+
+function locModalClose(){
+  _locModalOpen = false;
+  _locModalTarget = null;
+  const overlay = document.getElementById('loc-modal-overlay');
+  if(overlay) overlay.style.display = 'none';
+  if(_locModalQRScanner){
+    _locModalQRScanner.stop().catch(()=>{});
+    _locModalQRScanner = null;
+  }
+}
+
+// Capturar escaneo QR
+function locModalQRCapture(code){
+  locModalClose();
+  if(_locModalTarget !== null && _locModalTarget !== undefined){
+    locAddLocation(_locModalTarget, code);
+  }
+}
+
+// Agregar desde entrada manual
+function locModalManualAdd(){
+  const input = document.getElementById('loc-modal-manual-input');
+  if(!input) return;
+  const code = (input.value || '').trim().toUpperCase();
+  if(!code){
+    const msg = document.getElementById('loc-modal-manual-msg');
+    if(msg) msg.textContent = '⚠️ Escribe una localización';
+    return;
+  }
+  input.value = '';
+  locModalClose();
+  if(_locModalTarget !== null && _locModalTarget !== undefined){
+    locAddLocation(_locModalTarget, code);
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// LÓGICA DE LOCALIZACIONES (array en window.loadedProducts[idx].locations)
+// ──────────────────────────────────────────────────────────────────────────
+
+function locAddLocation(idx, code){
+  if(!window.loadedProducts) window.loadedProducts = {};
+  if(!window.loadedProducts[idx]) window.loadedProducts[idx] = {};
+  
+  if(!Array.isArray(window.loadedProducts[idx].locations)){
+    window.loadedProducts[idx].locations = [];
+  }
+  
+  // No duplicados
+  if(window.loadedProducts[idx].locations.includes(code)){
+    toast('⚠️ Localización ' + code + ' ya existe');
+    return;
+  }
+  
+  window.loadedProducts[idx].locations.push(code);
+  locRenderList(idx);
+  toast('✅ Localización agregada: ' + code);
+}
+
+function locRemoveLocation(idx, locCode){
+  if(!window.loadedProducts || !window.loadedProducts[idx]) return;
+  if(!Array.isArray(window.loadedProducts[idx].locations)) return;
+  
+  window.loadedProducts[idx].locations = 
+    window.loadedProducts[idx].locations.filter(l => l !== locCode);
+  
+  locRenderList(idx);
+  toast('❌ Localización removida: ' + locCode);
+}
+
+function locClearAll(idx){
+  if(!window.loadedProducts || !window.loadedProducts[idx]) return;
+  window.loadedProducts[idx].locations = [];
+  locRenderList(idx);
+  toast('❌ Todas las localizaciones borradas');
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// RENDERIZAR LISTA DE LOCALIZACIONES
+// ──────────────────────────────────────────────────────────────────────────
+
+function locRenderList(idx){
+  const container = document.getElementById('ssloc-list-' + idx);
+  if(!container) return;
+  
+  const locs = (window.loadedProducts && window.loadedProducts[idx] && 
+                window.loadedProducts[idx].locations) || [];
+  
+  if(locs.length === 0){
+    container.innerHTML = '<div style="font-size:12px;color:var(--mu);text-align:center;padding:12px">Sin localizaciones</div>';
+    return;
+  }
+  
+  let html = '<div style="display:flex;flex-direction:column;gap:8px">';
+  locs.forEach((loc, i) => {
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;
+              background:var(--sf2);padding:10px;border-radius:8px;border-left:3px solid var(--sv)">
+      <span style="font-weight:700;color:var(--tx)">${loc}</span>
+      <button style="background:var(--dw);border:none;border-radius:4px;padding:4px 8px;
+                     color:#fff;font-size:12px;cursor:pointer;font-weight:700"
+              onclick="locRemoveLocation(${idx}, '${loc}')">✕ Borrar</button>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// GUARDAR LOCALIZACIONES A SHIPSTATION
+// ──────────────────────────────────────────────────────────────────────────
+
+async function saveLocations(idx){
+  const p = (window.loadedProducts || {})[idx];
+  if(!p){
+    toast('⚠️ Producto no cargado');
+    return;
+  }
+  
+  const locs = Array.isArray(p.locations) ? p.locations : [];
+  if(locs.length === 0){
+    toast('⚠️ Agregar al menos una localización');
+    return;
+  }
+  
+  toast('📤 Guardando ' + locs.length + ' localización(es) en ShipStation...');
+  
+  try {
+    // Enviar como array; ShipStation puede guardar comma-separated o JSON
+    // Formato: "A-1, A-2, A-3" o como JSON array
+    const locationString = locs.join(', ');
+    
+    const res = await fetch(SB_PROXY + '/ss/create-product', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        sku: p.sku,
+        name: p.name || p.sku,
+        warehouse_location: locationString,  // "A-1, A-2, A-3"
+        upc: p.upc || '',
+        locations: locs  // array original también
+      })
+    });
+    
+    if(!res.ok){
+      const result = await res.json();
+      throw new Error(result.error || 'Save failed');
+    }
+    
+    const result = await res.json();
+    toast('✅ ' + locs.length + ' localización(es) guardada(s)', 3000);
+    
+  } catch(err){
+    console.error('Location save error:', err);
+    toast('❌ Error: ' + (err.message || err));
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// LOAD (cargar localizaciones existentes de ShipStation)
+// ──────────────────────────────────────────────────────────────────────────
+
+async function loadLocationsList(idx, sku, name, upc){
+  const statusEl = document.getElementById('ssloc-status-' + idx);
+  if(!statusEl) return;
+  
+  try {
+    const res = await fetch(SB_PROXY + '/ss/location?sku=' + encodeURIComponent(sku));
+    const data = await res.json();
+    
+    if(!window.loadedProducts) window.loadedProducts = {};
+    if(!window.loadedProducts[idx]) window.loadedProducts[idx] = {};
+    
+    if(data.exists){
+      const locStr = data.warehouse_location || '';
+      if(locStr){
+        // Parse: puede ser "A-1, A-2, A-3" o JSON
+        let locs = [];
+        try {
+          locs = JSON.parse(locStr);
+        } catch(e){
+          locs = locStr.split(',').map(s => s.trim()).filter(s => s);
+        }
+        window.loadedProducts[idx].locations = locs;
+        statusEl.innerHTML = '<span style="color:var(--sv)">✅ ' + locs.length + ' localización(es) en ShipStation</span>';
+      } else {
+        window.loadedProducts[idx].locations = [];
+        statusEl.innerHTML = '<span style="color:var(--gd)">⚠️ Está en ShipStation pero sin localización</span>';
+      }
+    } else {
+      window.loadedProducts[idx].locations = [];
+      statusEl.innerHTML = '<span style="color:#ff9800">🆕 No está en ShipStation. Agrega localizaciones.</span>';
+    }
+    
+    locRenderList(idx);
+  } catch(err){
+    window.loadedProducts[idx].locations = [];
+    statusEl.innerHTML = '<span style="color:var(--mu)">⚠️ No se pudo consultar ShipStation</span>';
+  }
+}
+
+
+
 </script>
+
+<!-- MULTI-LOCATION MODAL -->
+<div id="loc-modal-overlay" class="loc-modal-overlay">
+  <div class="loc-modal-content">
+    <div class="loc-modal-section">
+      <div class="loc-modal-section-title">📷 Escanear QR</div>
+      <div id="loc-modal-qr-reader"></div>
+      <div id="loc-modal-qr-msg" class="loc-modal-msg">Apunta a un código QR de localización</div>
+    </div>
+
+    <div class="loc-modal-section">
+      <div class="loc-modal-section-title">⌨️ O escribe manualmente</div>
+      <input type="text" id="loc-modal-manual-input" class="loc-modal-manual-input" 
+             placeholder="Ej: A-1, A-2, B-5..." inputmode="text" autocapitalize="characters">
+      <div id="loc-modal-manual-msg" class="loc-modal-msg"></div>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button class="loc-modal-btn" onclick="locModalManualAdd()">✅ Agregar</button>
+      <button class="loc-modal-btn sec" onclick="locModalClose()">❌ Cerrar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
