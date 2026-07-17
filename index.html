@@ -346,6 +346,11 @@ async function showProductFromProxy(data, searchedUpc){
         <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📅 eBay Listing Info</div>
         <div id="ebay-dates-${idx}" style="font-size:13px;color:var(--mu)">Consultando eBay...</div>
       </div>
+
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)">
+        <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📊 eBay Sales</div>
+        <div id="ebay-sales-${idx}" style="font-size:13px;color:var(--mu)">Consultando ventas...</div>
+      </div>
     </div>`;
   }).join('');
 
@@ -425,9 +430,48 @@ async function loadEbayDates(idx, sku, upc){
       html += '<div style="font-size:11px;color:var(--mu);margin-top:6px;line-height:1.3">🛒 ' + data.title + '</div>';
     }
     datesEl.innerHTML = html;
+    
+    // Cargar ventas usando el itemId obtenido
+    if(data.itemId){
+      loadEbaySales(idx, data.itemId);
+    }
   } catch(err){
     console.error('loadEbayDates error:', err);
     datesEl.innerHTML = '<span style="color:var(--mu)">Error fetching eBay info</span>';
+  }
+}
+
+// ── eBay: cargar ventas por itemId ────────────────────────────
+async function loadEbaySales(idx, itemId){
+  const salesEl = document.getElementById('ebay-sales-' + idx);
+  if(!salesEl) return;
+
+  try {
+    const res = await fetch(SB_PROXY + '/ebay-sales?item_id=' + encodeURIComponent(itemId) + '&days=90');
+    const data = await res.json();
+
+    if(data.status === 'error' || data.total_sold === 0){
+      salesEl.innerHTML = '<span style="color:var(--mu)">No sales in last 90 days</span>';
+      return;
+    }
+
+    let html = '';
+    html += '<div class="listing-row"><span class="key">Total sold:</span> <span class="val" style="color:var(--sv)">' + data.total_sold + ' órdenes</span></div>';
+    html += '<div class="listing-row"><span class="key">Total qty:</span> <span class="val" style="color:var(--sv)">' + data.total_quantity + ' unidades</span></div>';
+    
+    if(data.transactions && data.transactions.length > 0){
+      const recent = data.transactions.slice(0, 3);
+      html += '<div style="font-size:11px;color:var(--mu);margin-top:6px">';
+      html += '<strong>Recent:</strong> ';
+      recent.forEach(function(t, i){
+        html += (i>0 ? ', ' : '') + t.date + ' (' + t.qty + 'x)';
+      });
+      html += '</div>';
+    }
+    salesEl.innerHTML = html;
+  } catch(err){
+    console.error('loadEbaySales error:', err);
+    salesEl.innerHTML = '<span style="color:var(--mu)">Error fetching sales</span>';
   }
 }
 
