@@ -312,6 +312,11 @@ async function showProductFromProxy(data, searchedUpc){
         ${p.price ? `<span class="tag" style="background:var(--sf2);color:var(--gd);margin-left:6px">$${parseFloat(p.price).toFixed(2)}</span>` : ''}
       </div>
 
+      <div style="margin-bottom:12px;padding:12px;background:var(--sf);border-radius:8px;border:2px solid var(--sv)">
+        <div style="font-size:14px;color:var(--sv);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;font-weight:bold">📊 eBay SALES (Last 90 Days)</div>
+        <div id="ebay-sales-${idx}" style="font-size:16px;color:var(--sv);font-weight:bold;line-height:1.8;min-height:60px">Consultando ventas...</div>
+      </div>
+
       <div class="prod-stats">
         <div class="stat-box ${totalQty>5?'green':totalQty>0?'orange':'red'}">
           <div class="val">${totalQty}</div>
@@ -340,11 +345,6 @@ async function showProductFromProxy(data, searchedUpc){
           <input type="text" id="ssloc-input-${idx}" placeholder="Ej: A-12" style="width:100%;box-sizing:border-box;background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:12px;color:var(--tx);font-size:16px" inputmode="text" autocapitalize="characters">
         </div>
         <button class="btn" id="ssloc-btn-${idx}" onclick="saveLocation(${idx})" ontouchend="event.preventDefault();saveLocation(${idx})" style="background:var(--sf2);color:var(--tx);width:100%;padding:12px;border-radius:8px;border:1px solid var(--bd);font-weight:700">📍 Guardar ubicación</button>
-      </div>
-
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bd);order:-1">
-        <div style="font-size:14px;color:var(--sv);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:bold">📊 eBay SALES (Last 90 Days)</div>
-        <div id="ebay-sales-${idx}" style="font-size:16px;color:var(--sv);font-weight:bold;line-height:1.8">Consultando ventas...</div>
       </div>
 
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)">
