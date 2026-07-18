@@ -7,156 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Inventory">
   <title>Inventory Manager</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js">
-
-// ═════════════════════════════════════════════════════════════════════════════
-// EXIT INVENTORY MODULE - Registro de Salida de Inventario a Google Sheets
-// Permite sacar productos del inventario con razón y destino
-// ═════════════════════════════════════════════════════════════════════════════
-
-// URL DE WEBHOOK - YA CONFIGURADO CON TU GOOGLE APPS SCRIPT
-const EXIT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbx-k1-Aef7IDNQfobl6GL-o2_PxcYuk2fxwLDjJV9PFMxn9Z-WlOUzLGEEKu1wD9w3uzg/exec';
-
-let _exitModalOpen = false;
-let _exitModalTarget = null;  // idx del producto
-
-// ──────────────────────────────────────────────────────────────────────────
-// ABRIR MODAL DE SALIDA
-// ──────────────────────────────────────────────────────────────────────────
-
-function exitModalOpen(idx){
-  _exitModalTarget = idx;
-  _exitModalOpen = true;
-  
-  const p = (window.loadedProducts || {})[idx];
-  if(!p){
-    toast('⚠️ Producto no cargado');
-    return;
-  }
-  
-  // Llenar datos precargados
-  document.getElementById('exit-sku').value = p.sku || '';
-  document.getElementById('exit-product').value = p.name || '';
-  document.getElementById('exit-qty').value = '';
-  document.getElementById('exit-reason').value = 'No vende';
-  document.getElementById('exit-destination').value = 'Walnut';
-  document.getElementById('exit-notes').value = '';
-  document.getElementById('exit-msg').textContent = '';
-  
-  document.getElementById('exit-modal-overlay').style.display = 'flex';
-}
-
-function exitModalClose(){
-  _exitModalOpen = false;
-  _exitModalTarget = null;
-  document.getElementById('exit-modal-overlay').style.display = 'none';
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// ENVIAR SALIDA A GOOGLE SHEETS
-// ──────────────────────────────────────────────────────────────────────────
-
-async function exitSubmit(){
-  const sku = document.getElementById('exit-sku').value.trim();
-  const product = document.getElementById('exit-product').value.trim();
-  const qty = parseInt(document.getElementById('exit-qty').value) || 0;
-  const reason = document.getElementById('exit-reason').value.trim();
-  const destination = document.getElementById('exit-destination').value.trim();
-  const notes = document.getElementById('exit-notes').value.trim();
-  const msg = document.getElementById('exit-msg');
-  
-  // Validaciones
-  if(!qty || qty <= 0){
-    msg.textContent = '⚠️ Ingresa una cantidad válida';
-    msg.style.color = 'var(--dw)';
-    return;
-  }
-  if(!reason){
-    msg.textContent = '⚠️ Selecciona una razón';
-    msg.style.color = 'var(--dw)';
-    return;
-  }
-  if(!destination){
-    msg.textContent = '⚠️ Selecciona un destino';
-    msg.style.color = 'var(--dw)';
-    return;
-  }
-  
-  msg.textContent = '📤 Registrando salida...';
-  msg.style.color = 'var(--mu)';
-  
-  try {
-    // Payload para Google Sheets
-    const payload = {
-      sku: sku,
-      product: product,
-      quantity: qty,
-      reason: reason,
-      destination: destination,
-      user: SAVVY_CURRENT_USER || 'demo',
-      notes: notes,
-      timestamp: new Date().toISOString()
-    };
-    
-    // Enviar a Google Apps Script
-    const res = await fetch(EXIT_WEBHOOK_URL, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    });
-    
-    const result = await res.json();
-    
-    if(result.status === 'success'){
-      msg.textContent = '✅ ¡Salida registrada en Google Sheets!';
-      msg.style.color = 'var(--sv)';
-      
-      // Actualizar inventario a 0 (opcional)
-      if(window.loadedProducts && window.loadedProducts[_exitModalTarget]){
-        window.loadedProducts[_exitModalTarget].newQty = 0;
-        const input = document.getElementById('qty-' + _exitModalTarget);
-        if(input) input.value = 0;
-      }
-      
-      toast('✅ ' + qty + ' unidades sacadas → ' + destination);
-      setTimeout(exitModalClose, 2000);
-    } else {
-      msg.textContent = '❌ Error: ' + (result.message || 'No se pudo registrar');
-      msg.style.color = 'var(--dw)';
-    }
-    
-  } catch(err){
-    console.error('Exit error:', err);
-    msg.textContent = '❌ Error: ' + err.message;
-    msg.style.color = 'var(--dw)';
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// HELPER: Obtener razones disponibles
-// ──────────────────────────────────────────────────────────────────────────
-
-function getExitReasons(){
-  return [
-    'No vende',
-    'Dañado',
-    'Obsoleto',
-    'Defectuoso',
-    'Transferencia',
-    'Fin de lote',
-    'Otro'
-  ];
-}
-
-function getExitDestinations(){
-  return [
-    'Walnut',
-    'DWI'
-  ];
-}
-
-
-</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <style>
     :root {
       --bg:#0d0d0d;--sf:#1a1a1a;--sf2:#242424;--bd:#333;
@@ -277,31 +128,24 @@ function getExitDestinations(){
     .loc-modal-msg{font-size:12px;color:var(--mu);text-align:center}
 
 
-    /* EXIT INVENTORY MODAL */
+    /* EXIT INVENTORY MODALS */
     .exit-modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;
-                        background:rgba(0,0,0,.9);z-index:9000;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+                        background:rgba(0,0,0,.9);z-index:9000;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
     .exit-modal-overlay.on{display:flex}
-
     .exit-modal-content{background:var(--sf);border-radius:16px;width:100%;max-width:90vw;
-                        padding:20px;display:flex;flex-direction:column;gap:16px;box-shadow:0 4px 20px rgba(0,0,0,.3)}
-
+                        padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 4px 20px rgba(0,0,0,.3);margin:auto}
     .exit-field-group{display:flex;flex-direction:column;gap:8px}
     .exit-field-label{font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
-
     .exit-input{width:100%;padding:12px;background:var(--sf2);border:1px solid var(--bd);
-                border-radius:8px;color:var(--tx);font-size:14px;box-sizing:border-box}
+                border-radius:8px;color:var(--tx);font-size:16px;box-sizing:border-box}
     .exit-input:focus{outline:none;border-color:var(--ac)}
-
     .exit-select{width:100%;padding:12px;background:var(--sf2);border:1px solid var(--bd);
-                 border-radius:8px;color:var(--tx);font-size:14px;box-sizing:border-box}
-
+                 border-radius:8px;color:var(--tx);font-size:16px;box-sizing:border-box}
     .exit-textarea{width:100%;padding:12px;background:var(--sf2);border:1px solid var(--bd);
-                   border-radius:8px;color:var(--tx);font-size:14px;box-sizing:border-box;min-height:60px;font-family:inherit}
-
+                   border-radius:8px;color:var(--tx);font-size:16px;box-sizing:border-box;min-height:60px;font-family:inherit}
     .exit-btn{background:var(--ac);border:none;border-radius:8px;padding:12px;color:#fff;
               font-weight:800;font-size:14px;cursor:pointer}
     .exit-btn.cancel{background:var(--sf2);color:var(--mu);border:1px solid var(--bd)}
-
     .exit-msg{font-size:12px;color:var(--mu);text-align:center;min-height:16px}
 
   </style>
@@ -370,6 +214,10 @@ function getExitDestinations(){
     <div class="icon">🔍</div>
     <h2 style="margin-bottom:8px">Not Found</h2>
     <p id="notfound-msg">No product found with that UPC in Sellbrite</p>
+  </div>
+  <div style="margin-top:20px;padding:16px;background:var(--sf);border-radius:12px;border:1px solid var(--bd)">
+    <p style="font-size:13px;color:var(--mu);text-align:center;margin-bottom:14px">Este producto no está en Sellbrite ni ShipStation.<br>¿Quieres retirarlo del inventario de todos modos?</p>
+    <button class="btn" style="background:var(--dw);width:100%" onclick="manualExitOpen()" ontouchend="event.preventDefault();manualExitOpen()">🚪 Retirar de Inventario (Manual)</button>
   </div>
 </div>
 
@@ -454,7 +302,7 @@ async function searchUPC(upc){
     const data = await res.json();
 
     if(res.status === 404 || data.status === 'not_found'){
-      showNotFound('No product found with UPC: ' + upcClean + '\n\nMake sure the UPC is part of your SKU in Sellbrite (e.g. NIK-' + upcClean + '-1PK)');
+      showNotFound('No product found with UPC: ' + upcClean + '\n\nMake sure the UPC is part of your SKU in Sellbrite (e.g. NIK-' + upcClean + '-1PK)', upcClean);
       return;
     }
 
@@ -547,7 +395,7 @@ async function showProductFromProxy(data, searchedUpc){
         </div>
       </div>
       <button class="btn grn" onclick="updateInventory(${idx})" ontouchend="event.preventDefault();updateInventory(${idx})">✅ Actualizar este paquete</button>
-      <button class="btn" style="background:var(--dw)" onclick="exitModalOpen(${idx})" ontouchend="event.preventDefault();exitModalOpen(${idx})">🚪 Exit Inventory</button>
+      <button class="btn" style="background:var(--dw);margin-top:8px" onclick="exitModalOpen(${idx})" ontouchend="event.preventDefault();exitModalOpen(${idx})">🚪 Retirar de Inventario</button>
 
       <div class="ssloc-section">
         <div class="ssloc-header">📍 Localizaciones (ShipStation)</div>
@@ -760,8 +608,9 @@ async function updateInventory(idx){
 }
 
 // ── NOT FOUND ────────────────────────────────────────────────
-function showNotFound(msg){
+function showNotFound(msg, scannedUpc){
   $('notfound-msg').textContent = msg || 'No product found';
+  window._lastScannedUpc = scannedUpc || '';
   showScreen('scr-notfound');
 }
 
@@ -1040,151 +889,113 @@ async function loadLocationsList(idx, sku, name, upc){
 
 
 
-
-// ═════════════════════════════════════════════════════════════════════════════
-// EXIT INVENTORY MODULE - Registro de Salida de Inventario a Google Sheets
-// Permite sacar productos del inventario con razón y destino
-// ═════════════════════════════════════════════════════════════════════════════
-
-// URL DE WEBHOOK - YA CONFIGURADO CON TU GOOGLE APPS SCRIPT
+// ═════════════════════════════════════════════════════════════════════════
+// EXIT INVENTORY MODULE - Registro de salidas a Google Sheets
+// ═════════════════════════════════════════════════════════════════════════
 const EXIT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbx-k1-Aef7IDNQfobl6GL-o2_PxcYuk2fxwLDjJV9PFMxn9Z-WlOUzLGEEKu1wD9w3uzg/exec';
 
-let _exitModalOpen = false;
-let _exitModalTarget = null;  // idx del producto
-
-// ──────────────────────────────────────────────────────────────────────────
-// ABRIR MODAL DE SALIDA
-// ──────────────────────────────────────────────────────────────────────────
+// ── EXIT NORMAL (producto encontrado) ──────────────────────────────────
+let _exitTarget = null;
 
 function exitModalOpen(idx){
-  _exitModalTarget = idx;
-  _exitModalOpen = true;
-  
+  _exitTarget = idx;
   const p = (window.loadedProducts || {})[idx];
-  if(!p){
-    toast('⚠️ Producto no cargado');
-    return;
-  }
-  
-  // Llenar datos precargados
-  document.getElementById('exit-sku').value = p.sku || '';
-  document.getElementById('exit-product').value = p.name || '';
-  document.getElementById('exit-qty').value = '';
-  document.getElementById('exit-reason').value = 'No vende';
-  document.getElementById('exit-destination').value = 'Walnut';
-  document.getElementById('exit-notes').value = '';
-  document.getElementById('exit-msg').textContent = '';
-  
-  document.getElementById('exit-modal-overlay').style.display = 'flex';
+  if(!p){ toast('⚠️ Producto no cargado'); return; }
+  $('exit-sku').value = p.sku || '';
+  $('exit-product').value = p.name || '';
+  $('exit-qty').value = '';
+  $('exit-reason').value = 'No vende';
+  $('exit-destination').value = 'Whatnot';
+  $('exit-notes').value = '';
+  $('exit-msg').textContent = '';
+  $('exit-modal-overlay').classList.add('on');
 }
 
 function exitModalClose(){
-  _exitModalOpen = false;
-  _exitModalTarget = null;
-  document.getElementById('exit-modal-overlay').style.display = 'none';
+  _exitTarget = null;
+  $('exit-modal-overlay').classList.remove('on');
 }
-
-// ──────────────────────────────────────────────────────────────────────────
-// ENVIAR SALIDA A GOOGLE SHEETS
-// ──────────────────────────────────────────────────────────────────────────
 
 async function exitSubmit(){
-  const sku = document.getElementById('exit-sku').value.trim();
-  const product = document.getElementById('exit-product').value.trim();
-  const qty = parseInt(document.getElementById('exit-qty').value) || 0;
-  const reason = document.getElementById('exit-reason').value.trim();
-  const destination = document.getElementById('exit-destination').value.trim();
-  const notes = document.getElementById('exit-notes').value.trim();
-  const msg = document.getElementById('exit-msg');
-  
-  // Validaciones
-  if(!qty || qty <= 0){
-    msg.textContent = '⚠️ Ingresa una cantidad válida';
-    msg.style.color = 'var(--dw)';
-    return;
-  }
-  if(!reason){
-    msg.textContent = '⚠️ Selecciona una razón';
-    msg.style.color = 'var(--dw)';
-    return;
-  }
-  if(!destination){
-    msg.textContent = '⚠️ Selecciona un destino';
-    msg.style.color = 'var(--dw)';
-    return;
-  }
-  
-  msg.textContent = '📤 Registrando salida...';
-  msg.style.color = 'var(--mu)';
-  
+  const sku = $('exit-sku').value.trim();
+  const product = $('exit-product').value.trim();
+  const qty = parseInt($('exit-qty').value) || 0;
+  const reason = $('exit-reason').value.trim();
+  const destination = $('exit-destination').value.trim();
+  const notes = $('exit-notes').value.trim();
+  const msg = $('exit-msg');
+
+  if(!qty || qty <= 0){ msg.textContent = '⚠️ Ingresa una cantidad válida'; msg.style.color = 'var(--dw)'; return; }
+  if(!reason){ msg.textContent = '⚠️ Selecciona una razón'; msg.style.color = 'var(--dw)'; return; }
+  if(!destination){ msg.textContent = '⚠️ Selecciona un destino'; msg.style.color = 'var(--dw)'; return; }
+
+  msg.textContent = '📤 Registrando salida...'; msg.style.color = 'var(--mu)';
+
   try {
-    // Payload para Google Sheets
-    const payload = {
-      sku: sku,
-      product: product,
-      quantity: qty,
-      reason: reason,
-      destination: destination,
-      user: SAVVY_CURRENT_USER || 'demo',
-      notes: notes,
-      timestamp: new Date().toISOString()
-    };
-    
-    // Enviar a Google Apps Script
-    const res = await fetch(EXIT_WEBHOOK_URL, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    });
-    
+    const payload = { sku, product, quantity: qty, reason, destination, user: 'demo', notes, timestamp: new Date().toISOString() };
+    const res = await fetch(EXIT_WEBHOOK_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     const result = await res.json();
-    
     if(result.status === 'success'){
-      msg.textContent = '✅ ¡Salida registrada en Google Sheets!';
-      msg.style.color = 'var(--sv)';
-      
-      // Actualizar inventario a 0 (opcional)
-      if(window.loadedProducts && window.loadedProducts[_exitModalTarget]){
-        window.loadedProducts[_exitModalTarget].newQty = 0;
-        const input = document.getElementById('qty-' + _exitModalTarget);
-        if(input) input.value = 0;
-      }
-      
-      toast('✅ ' + qty + ' unidades sacadas → ' + destination);
-      setTimeout(exitModalClose, 2000);
+      msg.textContent = '✅ ¡Salida registrada!'; msg.style.color = 'var(--sv)';
+      toast('✅ ' + qty + ' unidades retiradas → ' + destination);
+      setTimeout(exitModalClose, 1500);
     } else {
-      msg.textContent = '❌ Error: ' + (result.message || 'No se pudo registrar');
-      msg.style.color = 'var(--dw)';
+      msg.textContent = '❌ Error: ' + (result.message || 'No se pudo registrar'); msg.style.color = 'var(--dw)';
     }
-    
   } catch(err){
     console.error('Exit error:', err);
-    msg.textContent = '❌ Error: ' + err.message;
-    msg.style.color = 'var(--dw)';
+    msg.textContent = '❌ Error: ' + err.message; msg.style.color = 'var(--dw)';
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// HELPER: Obtener razones disponibles
-// ──────────────────────────────────────────────────────────────────────────
-
-function getExitReasons(){
-  return [
-    'No vende',
-    'Dañado',
-    'Obsoleto',
-    'Defectuoso',
-    'Transferencia',
-    'Fin de lote',
-    'Otro'
-  ];
+// ── EXIT MANUAL (producto NO encontrado) ───────────────────────────────
+function manualExitOpen(){
+  $('manual-sku').value = window._lastScannedUpc || '';
+  $('manual-product').value = '';
+  $('manual-qty').value = '';
+  $('manual-reason').value = 'No vende';
+  $('manual-destination').value = 'Whatnot';
+  $('manual-notes').value = '';
+  $('manual-msg').textContent = '';
+  $('manual-exit-overlay').classList.add('on');
 }
 
-function getExitDestinations(){
-  return [
-    'Walnut',
-    'DWI'
-  ];
+function manualExitClose(){
+  $('manual-exit-overlay').classList.remove('on');
+}
+
+async function manualExitSubmit(){
+  const sku = $('manual-sku').value.trim();
+  const product = $('manual-product').value.trim();
+  const qty = parseInt($('manual-qty').value) || 0;
+  const reason = $('manual-reason').value.trim();
+  const destination = $('manual-destination').value.trim();
+  const notes = $('manual-notes').value.trim();
+  const msg = $('manual-msg');
+
+  if(!sku){ msg.textContent = '⚠️ Ingresa el UPC o SKU'; msg.style.color = 'var(--dw)'; return; }
+  if(!product){ msg.textContent = '⚠️ Ingresa el nombre del producto'; msg.style.color = 'var(--dw)'; return; }
+  if(!qty || qty <= 0){ msg.textContent = '⚠️ Ingresa una cantidad válida'; msg.style.color = 'var(--dw)'; return; }
+  if(!reason){ msg.textContent = '⚠️ Selecciona una razón'; msg.style.color = 'var(--dw)'; return; }
+  if(!destination){ msg.textContent = '⚠️ Selecciona un destino'; msg.style.color = 'var(--dw)'; return; }
+
+  msg.textContent = '📤 Registrando salida...'; msg.style.color = 'var(--mu)';
+
+  try {
+    const payload = { sku, product, quantity: qty, reason, destination, user: 'demo', notes: (notes ? notes + ' [MANUAL]' : 'Retiro manual'), timestamp: new Date().toISOString() };
+    const res = await fetch(EXIT_WEBHOOK_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const result = await res.json();
+    if(result.status === 'success'){
+      msg.textContent = '✅ ¡Salida registrada!'; msg.style.color = 'var(--sv)';
+      toast('✅ ' + qty + ' unidades retiradas → ' + destination);
+      setTimeout(function(){ manualExitClose(); showScreen('scr-home'); }, 1500);
+    } else {
+      msg.textContent = '❌ Error: ' + (result.message || 'No se pudo registrar'); msg.style.color = 'var(--dw)';
+    }
+  } catch(err){
+    console.error('Manual exit error:', err);
+    msg.textContent = '❌ Error: ' + err.message; msg.style.color = 'var(--dw)';
+  }
 }
 
 
@@ -1214,59 +1025,97 @@ function getExitDestinations(){
 </div>
 
 
-<!-- EXIT INVENTORY MODAL -->
+<!-- EXIT INVENTORY MODAL (producto encontrado) -->
 <div id="exit-modal-overlay" class="exit-modal-overlay">
   <div class="exit-modal-content">
-    <div style="text-align:center;font-size:18px;font-weight:800;color:var(--sv);margin-bottom:12px">🚪 Exit Inventory</div>
-    
+    <div style="text-align:center;font-size:18px;font-weight:800;color:var(--dw);margin-bottom:4px">🚪 Retirar de Inventario</div>
     <div class="exit-field-group">
       <label class="exit-field-label">SKU</label>
       <input type="text" id="exit-sku" class="exit-input" readonly style="background:var(--bd);color:var(--mu)">
     </div>
-    
     <div class="exit-field-group">
-      <label class="exit-field-label">Product</label>
+      <label class="exit-field-label">Producto</label>
       <input type="text" id="exit-product" class="exit-input" readonly style="background:var(--bd);color:var(--mu)">
     </div>
-    
     <div class="exit-field-group">
-      <label class="exit-field-label">⚠️ Quantity to Remove</label>
-      <input type="number" id="exit-qty" class="exit-input" placeholder="E.g.: 5" min="1">
+      <label class="exit-field-label">⚠️ Cantidad a Retirar</label>
+      <input type="number" id="exit-qty" class="exit-input" placeholder="Ej: 5" min="1" inputmode="numeric">
     </div>
-    
     <div class="exit-field-group">
-      <label class="exit-field-label">Reason</label>
+      <label class="exit-field-label">Razón (¿por qué lo retiras?)</label>
       <select id="exit-reason" class="exit-select">
-        <option value="">-- Select a reason --</option>
         <option value="No vende">No vende</option>
-        <option value="Damaged">Damaged</option>
-        <option value="Obsolete">Obsolete</option>
-        <option value="Defective">Defective</option>
-        <option value="Transfer">Transfer</option>
-        <option value="End of batch">End of batch</option>
-        <option value="Other">Other</option>
+        <option value="Dañado">Dañado</option>
+        <option value="Obsoleto">Obsoleto</option>
+        <option value="Defectuoso">Defectuoso</option>
+        <option value="Transferencia">Transferencia</option>
+        <option value="Fin de lote">Fin de lote</option>
+        <option value="Otro">Otro</option>
       </select>
     </div>
-    
     <div class="exit-field-group">
-      <label class="exit-field-label">📍 Destination</label>
+      <label class="exit-field-label">📍 Destino (¿a dónde lo mandas?)</label>
       <select id="exit-destination" class="exit-select">
-        <option value="">-- Select destination --</option>
-        <option value="Walnut">Walnut</option>
+        <option value="Whatnot">Whatnot</option>
         <option value="DWI">DWI</option>
       </select>
     </div>
-    
     <div class="exit-field-group">
-      <label class="exit-field-label">Notes (optional)</label>
-      <textarea id="exit-notes" class="exit-textarea" placeholder="E.g.: Old stock, wet box, etc"></textarea>
+      <label class="exit-field-label">Notas (opcional)</label>
+      <textarea id="exit-notes" class="exit-textarea" placeholder="Ej: Stock viejo, caja mojada, etc"></textarea>
     </div>
-    
     <div id="exit-msg" class="exit-msg"></div>
-    
     <div style="display:flex;gap:8px">
-      <button class="exit-btn" onclick="exitSubmit()" style="flex:1">✅ Register Exit</button>
-      <button class="exit-btn cancel" onclick="exitModalClose()" style="flex:1">❌ Cancel</button>
+      <button class="exit-btn" onclick="exitSubmit()" ontouchend="event.preventDefault();exitSubmit()" style="flex:1">✅ Registrar Salida</button>
+      <button class="exit-btn cancel" onclick="exitModalClose()" ontouchend="event.preventDefault();exitModalClose()" style="flex:1">❌ Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANUAL EXIT MODAL (producto NO encontrado) -->
+<div id="manual-exit-overlay" class="exit-modal-overlay">
+  <div class="exit-modal-content">
+    <div style="text-align:center;font-size:18px;font-weight:800;color:var(--dw);margin-bottom:4px">🚪 Retiro Manual</div>
+    <div style="text-align:center;font-size:12px;color:var(--mu);margin-bottom:4px">Producto no listado en Sellbrite/ShipStation</div>
+    <div class="exit-field-group">
+      <label class="exit-field-label">UPC / SKU (escaneado)</label>
+      <input type="text" id="manual-sku" class="exit-input" placeholder="UPC o SKU">
+    </div>
+    <div class="exit-field-group">
+      <label class="exit-field-label">Nombre del Producto</label>
+      <input type="text" id="manual-product" class="exit-input" placeholder="Ej: Trojan Condoms 3pk">
+    </div>
+    <div class="exit-field-group">
+      <label class="exit-field-label">⚠️ Cantidad a Retirar</label>
+      <input type="number" id="manual-qty" class="exit-input" placeholder="Ej: 5" min="1" inputmode="numeric">
+    </div>
+    <div class="exit-field-group">
+      <label class="exit-field-label">Razón (¿por qué lo retiras?)</label>
+      <select id="manual-reason" class="exit-select">
+        <option value="No vende">No vende</option>
+        <option value="Dañado">Dañado</option>
+        <option value="Obsoleto">Obsoleto</option>
+        <option value="Defectuoso">Defectuoso</option>
+        <option value="No listado">No listado</option>
+        <option value="Transferencia">Transferencia</option>
+        <option value="Otro">Otro</option>
+      </select>
+    </div>
+    <div class="exit-field-group">
+      <label class="exit-field-label">📍 Destino (¿a dónde lo mandas?)</label>
+      <select id="manual-destination" class="exit-select">
+        <option value="Whatnot">Whatnot</option>
+        <option value="DWI">DWI</option>
+      </select>
+    </div>
+    <div class="exit-field-group">
+      <label class="exit-field-label">Notas (opcional)</label>
+      <textarea id="manual-notes" class="exit-textarea" placeholder="Ej: Encontrado en bodega, sin listar"></textarea>
+    </div>
+    <div id="manual-msg" class="exit-msg"></div>
+    <div style="display:flex;gap:8px">
+      <button class="exit-btn" onclick="manualExitSubmit()" ontouchend="event.preventDefault();manualExitSubmit()" style="flex:1">✅ Registrar Salida</button>
+      <button class="exit-btn cancel" onclick="manualExitClose()" ontouchend="event.preventDefault();manualExitClose()" style="flex:1">❌ Cancelar</button>
     </div>
   </div>
 </div>
