@@ -216,8 +216,8 @@
     <p id="notfound-msg">No product found with that UPC in Sellbrite</p>
   </div>
   <div style="margin-top:20px;padding:16px;background:var(--sf);border-radius:12px;border:1px solid var(--bd)">
-    <p style="font-size:13px;color:var(--mu);text-align:center;margin-bottom:14px">Este producto no está en Sellbrite ni ShipStation.<br>¿Quieres retirarlo del inventario de todos modos?</p>
-    <button class="btn" style="background:var(--dw);width:100%" onclick="manualExitOpen()" ontouchend="event.preventDefault();manualExitOpen()">🚪 Retirar de Inventario (Manual)</button>
+    <p style="font-size:13px;color:var(--mu);text-align:center;margin-bottom:14px">This product is not in Sellbrite or ShipStation.<br>Do you want to remove it from inventory anyway?</p>
+    <button class="btn" style="background:var(--dw);width:100%" onclick="manualExitOpen()" ontouchend="event.preventDefault();manualExitOpen()">🚪 Remove from Inventory (Manual)</button>
   </div>
 </div>
 
@@ -395,7 +395,7 @@ async function showProductFromProxy(data, searchedUpc){
         </div>
       </div>
       <button class="btn grn" onclick="updateInventory(${idx})" ontouchend="event.preventDefault();updateInventory(${idx})">✅ Actualizar este paquete</button>
-      <button class="btn" style="background:var(--dw);margin-top:8px" onclick="exitModalOpen(${idx})" ontouchend="event.preventDefault();exitModalOpen(${idx})">🚪 Retirar de Inventario</button>
+      <button class="btn" style="background:var(--dw);margin-top:8px" onclick="exitModalOpen(${idx})" ontouchend="event.preventDefault();exitModalOpen(${idx})">🚪 Remove from Inventory</button>
 
       <div class="ssloc-section">
         <div class="ssloc-header">📍 Localizaciones (ShipStation)</div>
@@ -904,7 +904,7 @@ function exitModalOpen(idx){
   $('exit-sku').value = p.sku || '';
   $('exit-product').value = p.name || '';
   $('exit-qty').value = '';
-  $('exit-reason').value = 'No vende';
+  $('exit-reason').value = 'Not selling';
   $('exit-destination').value = 'Whatnot';
   $('exit-notes').value = '';
   $('exit-msg').textContent = '';
@@ -925,18 +925,18 @@ async function exitSubmit(){
   const notes = $('exit-notes').value.trim();
   const msg = $('exit-msg');
 
-  if(!qty || qty <= 0){ msg.textContent = '⚠️ Ingresa una cantidad válida'; msg.style.color = 'var(--dw)'; return; }
-  if(!reason){ msg.textContent = '⚠️ Selecciona una razón'; msg.style.color = 'var(--dw)'; return; }
-  if(!destination){ msg.textContent = '⚠️ Selecciona un destino'; msg.style.color = 'var(--dw)'; return; }
+  if(!qty || qty <= 0){ msg.textContent = '⚠️ Enter a valid quantity'; msg.style.color = 'var(--dw)'; return; }
+  if(!reason){ msg.textContent = '⚠️ Select a reason'; msg.style.color = 'var(--dw)'; return; }
+  if(!destination){ msg.textContent = '⚠️ Select a destination'; msg.style.color = 'var(--dw)'; return; }
 
-  msg.textContent = '📤 Registrando salida...'; msg.style.color = 'var(--mu)';
+  msg.textContent = '📤 Registering exit...'; msg.style.color = 'var(--mu)';
 
   try {
     const payload = { sku, product, quantity: qty, reason, destination, user: 'demo', notes, timestamp: new Date().toISOString() };
     await fetch(EXIT_WEBHOOK_URL, { method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
-    // Con mode:no-cors no podemos leer la respuesta, pero la fila SÍ se agrega al Sheet
-    msg.textContent = '✅ ¡Salida registrada!'; msg.style.color = 'var(--sv)';
-    toast('✅ ' + qty + ' unidades retiradas → ' + destination);
+    // With mode:no-cors we can't read the response, but the row IS added to the Sheet
+    msg.textContent = '✅ Exit registered!'; msg.style.color = 'var(--sv)';
+    toast('✅ ' + qty + ' units removed → ' + destination);
     setTimeout(exitModalClose, 1500);
   } catch(err){
     console.error('Exit error:', err);
@@ -947,9 +947,8 @@ async function exitSubmit(){
 // ── EXIT MANUAL (producto NO encontrado) ───────────────────────────────
 function manualExitOpen(){
   $('manual-sku').value = window._lastScannedUpc || '';
-  $('manual-product').value = '';
   $('manual-qty').value = '';
-  $('manual-reason').value = 'No vende';
+  $('manual-reason').value = 'Not selling';
   $('manual-destination').value = 'Whatnot';
   $('manual-notes').value = '';
   $('manual-msg').textContent = '';
@@ -962,27 +961,26 @@ function manualExitClose(){
 
 async function manualExitSubmit(){
   const sku = $('manual-sku').value.trim();
-  const product = $('manual-product').value.trim();
+  const product = sku;  // Product = scanned barcode/SKU
   const qty = parseInt($('manual-qty').value) || 0;
   const reason = $('manual-reason').value.trim();
   const destination = $('manual-destination').value.trim();
   const notes = $('manual-notes').value.trim();
   const msg = $('manual-msg');
 
-  if(!sku){ msg.textContent = '⚠️ Ingresa el UPC o SKU'; msg.style.color = 'var(--dw)'; return; }
-  if(!product){ msg.textContent = '⚠️ Ingresa el nombre del producto'; msg.style.color = 'var(--dw)'; return; }
-  if(!qty || qty <= 0){ msg.textContent = '⚠️ Ingresa una cantidad válida'; msg.style.color = 'var(--dw)'; return; }
-  if(!reason){ msg.textContent = '⚠️ Selecciona una razón'; msg.style.color = 'var(--dw)'; return; }
-  if(!destination){ msg.textContent = '⚠️ Selecciona un destino'; msg.style.color = 'var(--dw)'; return; }
+  if(!sku){ msg.textContent = '⚠️ Enter the UPC or SKU'; msg.style.color = 'var(--dw)'; return; }
+  if(!qty || qty <= 0){ msg.textContent = '⚠️ Enter a valid quantity'; msg.style.color = 'var(--dw)'; return; }
+  if(!reason){ msg.textContent = '⚠️ Select a reason'; msg.style.color = 'var(--dw)'; return; }
+  if(!destination){ msg.textContent = '⚠️ Select a destination'; msg.style.color = 'var(--dw)'; return; }
 
-  msg.textContent = '📤 Registrando salida...'; msg.style.color = 'var(--mu)';
+  msg.textContent = '📤 Registering exit...'; msg.style.color = 'var(--mu)';
 
   try {
-    const payload = { sku, product, quantity: qty, reason, destination, user: 'demo', notes: (notes ? notes + ' [MANUAL]' : 'Retiro manual'), timestamp: new Date().toISOString() };
+    const payload = { sku, product, quantity: qty, reason, destination, user: 'demo', notes: (notes ? notes + ' [MANUAL]' : 'Manual removal'), timestamp: new Date().toISOString() };
     await fetch(EXIT_WEBHOOK_URL, { method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
-    // Con mode:no-cors no podemos leer la respuesta, pero la fila SÍ se agrega al Sheet
-    msg.textContent = '✅ ¡Salida registrada!'; msg.style.color = 'var(--sv)';
-    toast('✅ ' + qty + ' unidades retiradas → ' + destination);
+    // With mode:no-cors we can't read the response, but the row IS added to the Sheet
+    msg.textContent = '✅ Exit registered!'; msg.style.color = 'var(--sv)';
+    toast('✅ ' + qty + ' units removed → ' + destination);
     setTimeout(function(){ manualExitClose(); showScreen('scr-home'); }, 1500);
   } catch(err){
     console.error('Manual exit error:', err);
@@ -1017,97 +1015,93 @@ async function manualExitSubmit(){
 </div>
 
 
-<!-- EXIT INVENTORY MODAL (producto encontrado) -->
+<!-- EXIT INVENTORY MODAL (product found) -->
 <div id="exit-modal-overlay" class="exit-modal-overlay">
   <div class="exit-modal-content">
-    <div style="text-align:center;font-size:18px;font-weight:800;color:var(--dw);margin-bottom:4px">🚪 Retirar de Inventario</div>
+    <div style="text-align:center;font-size:18px;font-weight:800;color:var(--dw);margin-bottom:4px">🚪 Remove from Inventory</div>
     <div class="exit-field-group">
       <label class="exit-field-label">SKU</label>
       <input type="text" id="exit-sku" class="exit-input" readonly style="background:var(--bd);color:var(--mu)">
     </div>
     <div class="exit-field-group">
-      <label class="exit-field-label">Producto</label>
+      <label class="exit-field-label">Product</label>
       <input type="text" id="exit-product" class="exit-input" readonly style="background:var(--bd);color:var(--mu)">
     </div>
     <div class="exit-field-group">
-      <label class="exit-field-label">⚠️ Cantidad a Retirar</label>
-      <input type="number" id="exit-qty" class="exit-input" placeholder="Ej: 5" min="1" inputmode="numeric">
+      <label class="exit-field-label">⚠️ Quantity to Remove</label>
+      <input type="number" id="exit-qty" class="exit-input" placeholder="E.g.: 5" min="1" inputmode="numeric">
     </div>
     <div class="exit-field-group">
-      <label class="exit-field-label">Razón (¿por qué lo retiras?)</label>
+      <label class="exit-field-label">Reason (why remove it?)</label>
       <select id="exit-reason" class="exit-select">
-        <option value="No vende">No vende</option>
-        <option value="Dañado">Dañado</option>
-        <option value="Obsoleto">Obsoleto</option>
-        <option value="Defectuoso">Defectuoso</option>
-        <option value="Transferencia">Transferencia</option>
-        <option value="Fin de lote">Fin de lote</option>
-        <option value="Otro">Otro</option>
+        <option value="Not selling">Not selling</option>
+        <option value="Damaged">Damaged</option>
+        <option value="Obsolete">Obsolete</option>
+        <option value="Defective">Defective</option>
+        <option value="Transfer">Transfer</option>
+        <option value="End of batch">End of batch</option>
+        <option value="Other">Other</option>
       </select>
     </div>
     <div class="exit-field-group">
-      <label class="exit-field-label">📍 Destino (¿a dónde lo mandas?)</label>
+      <label class="exit-field-label">📍 Destination (where to send it?)</label>
       <select id="exit-destination" class="exit-select">
         <option value="Whatnot">Whatnot</option>
         <option value="DWI">DWI</option>
       </select>
     </div>
     <div class="exit-field-group">
-      <label class="exit-field-label">Notas (opcional)</label>
-      <textarea id="exit-notes" class="exit-textarea" placeholder="Ej: Stock viejo, caja mojada, etc"></textarea>
+      <label class="exit-field-label">Notes (optional)</label>
+      <textarea id="exit-notes" class="exit-textarea" placeholder="E.g.: Old stock, wet box, etc"></textarea>
     </div>
     <div id="exit-msg" class="exit-msg"></div>
     <div style="display:flex;gap:8px">
-      <button class="exit-btn" onclick="exitSubmit()" ontouchend="event.preventDefault();exitSubmit()" style="flex:1">✅ Registrar Salida</button>
-      <button class="exit-btn cancel" onclick="exitModalClose()" ontouchend="event.preventDefault();exitModalClose()" style="flex:1">❌ Cancelar</button>
+      <button class="exit-btn" onclick="exitSubmit()" ontouchend="event.preventDefault();exitSubmit()" style="flex:1">✅ Register Exit</button>
+      <button class="exit-btn cancel" onclick="exitModalClose()" ontouchend="event.preventDefault();exitModalClose()" style="flex:1">❌ Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- MANUAL EXIT MODAL (producto NO encontrado) -->
+<!-- MANUAL EXIT MODAL (product NOT found) -->
 <div id="manual-exit-overlay" class="exit-modal-overlay">
   <div class="exit-modal-content">
-    <div style="text-align:center;font-size:18px;font-weight:800;color:var(--dw);margin-bottom:4px">🚪 Retiro Manual</div>
-    <div style="text-align:center;font-size:12px;color:var(--mu);margin-bottom:4px">Producto no listado en Sellbrite/ShipStation</div>
+    <div style="text-align:center;font-size:18px;font-weight:800;color:var(--dw);margin-bottom:4px">🚪 Manual Removal</div>
+    <div style="text-align:center;font-size:12px;color:var(--mu);margin-bottom:4px">Product not listed in Sellbrite/ShipStation</div>
     <div class="exit-field-group">
-      <label class="exit-field-label">UPC / SKU (escaneado)</label>
-      <input type="text" id="manual-sku" class="exit-input" placeholder="UPC o SKU">
+      <label class="exit-field-label">UPC / SKU (scanned)</label>
+      <input type="text" id="manual-sku" class="exit-input" placeholder="UPC or SKU">
     </div>
     <div class="exit-field-group">
-      <label class="exit-field-label">Nombre del Producto</label>
-      <input type="text" id="manual-product" class="exit-input" placeholder="Ej: Trojan Condoms 3pk">
+      <label class="exit-field-label">⚠️ Quantity to Remove</label>
+      <input type="number" id="manual-qty" class="exit-input" placeholder="E.g.: 5" min="1" inputmode="numeric">
     </div>
     <div class="exit-field-group">
-      <label class="exit-field-label">⚠️ Cantidad a Retirar</label>
-      <input type="number" id="manual-qty" class="exit-input" placeholder="Ej: 5" min="1" inputmode="numeric">
-    </div>
-    <div class="exit-field-group">
-      <label class="exit-field-label">Razón (¿por qué lo retiras?)</label>
+      <label class="exit-field-label">Reason (why remove it?)</label>
       <select id="manual-reason" class="exit-select">
-        <option value="No vende">No vende</option>
-        <option value="Dañado">Dañado</option>
-        <option value="Obsoleto">Obsoleto</option>
-        <option value="Defectuoso">Defectuoso</option>
-        <option value="No listado">No listado</option>
-        <option value="Transferencia">Transferencia</option>
-        <option value="Otro">Otro</option>
+        <option value="Not selling">Not selling</option>
+        <option value="Damaged">Damaged</option>
+        <option value="Obsolete">Obsolete</option>
+        <option value="Defective">Defective</option>
+        <option value="Not listed">Not listed</option>
+        <option value="Transfer">Transfer</option>
+        <option value="Other">Other</option>
       </select>
     </div>
     <div class="exit-field-group">
-      <label class="exit-field-label">📍 Destino (¿a dónde lo mandas?)</label>
+      <label class="exit-field-label">📍 Destination (where to send it?)</label>
       <select id="manual-destination" class="exit-select">
         <option value="Whatnot">Whatnot</option>
         <option value="DWI">DWI</option>
       </select>
     </div>
     <div class="exit-field-group">
-      <label class="exit-field-label">Notas (opcional)</label>
-      <textarea id="manual-notes" class="exit-textarea" placeholder="Ej: Encontrado en bodega, sin listar"></textarea>
+      <label class="exit-field-label">Notes (optional)</label>
+      <textarea id="manual-notes" class="exit-textarea" placeholder="E.g.: Found in warehouse, unlisted"></textarea>
     </div>
     <div id="manual-msg" class="exit-msg"></div>
     <div style="display:flex;gap:8px">
-      <button class="exit-btn" onclick="manualExitSubmit()" ontouchend="event.preventDefault();manualExitSubmit()" style="flex:1">✅ Registrar Salida</button>
-      <button class="exit-btn cancel" onclick="manualExitClose()" ontouchend="event.preventDefault();manualExitClose()" style="flex:1">❌ Cancelar</button>
+      <button class="exit-btn" onclick="manualExitSubmit()" ontouchend="event.preventDefault();manualExitSubmit()" style="flex:1">✅ Register Exit</button>
+      <button class="exit-btn cancel" onclick="manualExitClose()" ontouchend="event.preventDefault();manualExitClose()" style="flex:1">❌ Cancel</button>
     </div>
   </div>
 </div>
