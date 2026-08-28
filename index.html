@@ -157,7 +157,41 @@
     <img src="https://octavio-cmd.github.io/savvy-home/icon.png" onerror="this.style.display='none'">
     <div class="hdr-title"><span>Savvy</span> Inventory</div>
   </div>
-  <button class="hdr-back" onclick="goHome()" ontouchend="event.preventDefault();goHome()">🏠 Home</button>
+  <div style="display:flex;align-items:center;gap:8px">
+    <button class="hdr-back" id="headerLogout" onclick="savvyLogout()" ontouchend="event.preventDefault();savvyLogout()" style="display:none;background:var(--dw);color:white;padding:6px 12px;border-radius:6px;font-size:12px">🚪 Salir</button>
+    <button class="hdr-back" onclick="goHome()" ontouchend="event.preventDefault();goHome()">🏠 Home</button>
+  </div>
+</div>
+
+<!-- LOGIN SCREEN -->
+<div class="scr" id="scr-login">
+  <div style="padding:40px 20px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - 57px)">
+    <div style="text-align:center;margin-bottom:40px">
+      <div style="font-size:48px;margin-bottom:16px">🔐</div>
+      <div style="font-size:22px;font-weight:800">Savvy Inventory</div>
+      <div style="font-size:13px;color:var(--mu);margin-top:8px">Inicia sesión para continuar</div>
+    </div>
+
+    <div style="width:100%;max-width:320px;display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="display:block;font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:700">Usuario</label>
+        <input type="text" id="loginUsuario" placeholder="Tu usuario" style="width:100%;padding:12px;background:var(--sf);border:1px solid var(--bd);border-radius:10px;color:var(--tx);font-size:16px;box-sizing:border-box">
+      </div>
+
+      <div>
+        <label style="display:block;font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:700">Contraseña</label>
+        <input type="password" id="loginPassword" placeholder="Tu contraseña" style="width:100%;padding:12px;background:var(--sf);border:1px solid var(--bd);border-radius:10px;color:var(--tx);font-size:16px;box-sizing:border-box">
+      </div>
+
+      <div id="login-msg" style="font-size:13px;color:var(--dw);text-align:center;min-height:16px;margin-top:4px"></div>
+
+      <button class="btn" onclick="savvyLogin()" ontouchend="event.preventDefault();savvyLogin()" style="margin-top:8px">🔓 Ingresar</button>
+    </div>
+
+    <div style="font-size:12px;color:var(--mu);text-align:center;margin-top:20px;padding:16px">
+      <p>Usa tus credenciales de Savvy</p>
+    </div>
+  </div>
 </div>
 
 <!-- HOME SCREEN -->
@@ -231,6 +265,144 @@ let scanner = null;
 let currentProduct = null;
 let _tt = null;
 
+// ── SESSION STATE (AUTHENTICATION) ──────────────────────────
+let savvy_session_token = null;
+let savvy_session_user = null;
+
+function getToken(){
+  return sessionStorage.getItem('savvy_session_token');
+}
+
+function getSessionUser(){
+  return sessionStorage.getItem('savvy_session_user');
+}
+
+function isAuthenticated(){
+  return getToken() !== null && getSessionUser() !== null;
+}
+
+// ── SAVVY AUTH FETCH HELPER ─────────────────────────────────
+async function savvyAuthFetch(path, options={}){
+  const token = getToken();
+  if(!token){
+    showLoginScreen();
+    throw new Error('No authentication token');
+  }
+
+  // Validate origin exactly using URL API
+  const backendUrl = new URL(SB_PROXY);
+  let requestUrl;
+  try {
+    // Resolve path safely: absolute URLs must match origin, relative must be resolved
+    if(path.startsWith('http://') || path.startsWith('https://') || path.startsWith('//')){
+      requestUrl = new URL(path);
+    } else {
+      requestUrl = new URL(path, SB_PROXY);
+    }
+  } catch(e){
+    throw new Error('Invalid URL construction');
+  }
+
+  // Verify origin matches exactly - REJECT if different origin
+  if(requestUrl.origin !== backendUrl.origin){
+    throw new Error('Origin mismatch: ' + requestUrl.origin + ' !== ' + backendUrl.origin);
+  }
+
+  const url = requestUrl.href;
+  const headers = new Headers(options.headers || {});
+  headers.set('Authorization', 'Bearer ' + token);
+
+  const fetchOptions = {
+    ...options,
+    headers: headers
+  };
+
+  const res = await fetch(url, fetchOptions);
+
+  // Handle 401/403: clear session, show login, don't reload
+  if(res.status === 401 || res.status === 403){
+    sessionStorage.removeItem('savvy_session_token');
+    sessionStorage.removeItem('savvy_session_user');
+    showLoginScreen();
+    throw new Error('Session expired or unauthorized');
+  }
+
+  return res;
+}
+
+// ── LOGIN FUNCTIONS ────────────────────────────────────────
+function showLoginScreen(){
+  document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on'));
+  $('scr-login').classList.add('on');
+}
+
+async function savvyLogin(){
+  const usuario = $('loginUsuario').value.trim();
+  let password = '';
+  const msgEl = $('login-msg');
+
+  try {
+    password = $('loginPassword').value;
+
+    if(!usuario){
+      msgEl.textContent = '⚠️ Ingresa tu usuario';
+      msgEl.style.color = 'var(--dw)';
+      return;
+    }
+
+    if(!password){
+      msgEl.textContent = '⚠️ Ingresa tu contraseña';
+      msgEl.style.color = 'var(--dw)';
+      return;
+    }
+
+    msgEl.textContent = '⏳ Autenticando...';
+    msgEl.style.color = 'var(--mu)';
+
+    const res = await fetch(SB_PROXY + '/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({usuario: usuario, password: password})
+    });
+
+    const data = await res.json();
+
+    if(!res.ok || !data.token){
+      msgEl.textContent = '❌ Credenciales inválidas';
+      msgEl.style.color = 'var(--dw)';
+      return;
+    }
+
+    // Success: save token and user to sessionStorage only
+    sessionStorage.setItem('savvy_session_token', data.token);
+    sessionStorage.setItem('savvy_session_user', data.usuario);
+
+    msgEl.textContent = '';
+
+    // Hide login and show home
+    showScreen('scr-home');
+    toast('✅ Sesión iniciada como ' + data.usuario);
+
+  } catch(err){
+    msgEl.textContent = '❌ Error de conexión';
+    msgEl.style.color = 'var(--dw)';
+  } finally {
+    // GUARANTEED cleanup: password variable and field cleared regardless of path taken
+    password = '';
+    $('loginPassword').value = '';
+  }
+}
+
+function savvyLogout(){
+  sessionStorage.removeItem('savvy_session_token');
+  sessionStorage.removeItem('savvy_session_user');
+  $('loginUsuario').value = '';
+  $('loginPassword').value = '';
+  $('login-msg').textContent = '';
+  showLoginScreen();
+  toast('✅ Sesión cerrada');
+}
+
 // ── UTILS ───────────────────────────────────────────────────
 function $(id){ return document.getElementById(id); }
 
@@ -293,12 +465,13 @@ function searchManual(){
 
 // ── SEARCH SELLBRITE via Railway Proxy ───────────────────────
 async function searchUPC(upc){
+  if(!isAuthenticated()){ showLoginScreen(); return; }
   showScreen('scr-load');
   const upcClean = upc.replace(/\D/g,'');
   $('load-msg').textContent = 'Searching Sellbrite for UPC: ' + upcClean + '...';
 
   try {
-    const res = await fetch(SB_PROXY + '/sb/search?upc=' + encodeURIComponent(upcClean));
+    const res = await savvyAuthFetch('/sb/search?upc=' + encodeURIComponent(upcClean));
     const data = await res.json();
 
     if(res.status === 404 || data.status === 'not_found'){
@@ -443,7 +616,12 @@ async function loadLocation(idx, sku, name, upc){
   window.loadedProducts[idx] = Object.assign(window.loadedProducts[idx]||{}, {sku, name, upc});
 
   try {
-    const res = await fetch(SB_PROXY + '/ss/location?sku=' + encodeURIComponent(sku));
+    const token = getToken();
+    if(!token){
+      statusEl.innerHTML = '<span style="color:var(--mu)">⚠️ No hay sesión activa</span>';
+      return;
+    }
+    const res = await savvyAuthFetch('/ss/location?sku=' + encodeURIComponent(sku));
     const data = await res.json();
 
     if(data.exists){
@@ -470,9 +648,14 @@ async function loadEbayDates(idx, sku, upc){
   if(!datesEl) return;
 
   try {
+    const token = getToken();
+    if(!token){
+      datesEl.innerHTML = '<span style="color:var(--mu)">Sin sesión</span>';
+      return;
+    }
     // Buscar por UPC (gtin) + SKU en el backend Railway
     const qs = 'sku=' + encodeURIComponent(sku) + (upc ? '&upc=' + encodeURIComponent(upc) : '');
-    const res = await fetch(SB_PROXY + '/ebay-item-dates?' + qs);
+    const res = await savvyAuthFetch('/ebay-item-dates?' + qs);
     const data = await res.json();
 
     if(data.status === 'error' || !data.listingDate){
@@ -507,7 +690,12 @@ async function loadEbaySales(idx, itemId){
   if(!salesEl) return;
 
   try {
-    const res = await fetch(SB_PROXY + '/ebay-sales?item_id=' + encodeURIComponent(itemId) + '&days=90');
+    const token = getToken();
+    if(!token){
+      salesEl.innerHTML = '<span style="color:var(--mu)">Sin sesión</span>';
+      return;
+    }
+    const res = await savvyAuthFetch('/ebay-sales?item_id=' + encodeURIComponent(itemId) + '&days=90');
     const data = await res.json();
 
     if(data.status === 'error' || !data.total_sold || data.total_sold === 0){
@@ -547,7 +735,12 @@ async function saveLocation(idx){
 
   toast('📤 Guardando en ShipStation...');
   try {
-    const res = await fetch(SB_PROXY + '/ss/create-product', {
+    const token = getToken();
+    if(!token){
+      toast('❌ No hay sesión activa');
+      return;
+    }
+    const res = await savvyAuthFetch('/ss/create-product', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -587,7 +780,12 @@ async function updateInventory(idx){
   toast('📤 Actualizando inventario...');
 
   try {
-    const res = await fetch(SB_PROXY + '/sb/update-inventory', {
+    const token = getToken();
+    if(!token){
+      toast('❌ No hay sesión activa');
+      return;
+    }
+    const res = await savvyAuthFetch('/sb/update-inventory', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -640,10 +838,24 @@ function renderRecent(){
 }
 
 // ── INIT ─────────────────────────────────────────────────────
+function updateAuthUI(){
+  const isAuth = isAuthenticated();
+  $('headerLogout').style.display = isAuth ? 'block' : 'none';
+
+  if(isAuth){
+    renderRecent();
+    showScreen('scr-home');
+  } else {
+    showLoginScreen();
+  }
+}
+
 window.addEventListener('load', function(){
-  renderRecent();
+  updateAuthUI();
   $('manualUpc').addEventListener('keydown', e=>{ if(e.key==='Enter') searchManual(); });
   $('scanUpc').addEventListener('keydown', e=>{ if(e.key==='Enter') searchFromScan(); });
+  $('loginUsuario').addEventListener('keydown', e=>{ if(e.key==='Enter') savvyLogin(); });
+  $('loginPassword').addEventListener('keydown', e=>{ if(e.key==='Enter') savvyLogin(); });
 });
 // ═════════════════════════════════════════════════════════════════════════════
 // MULTI-LOCATION MODULE para Inventory Manager
@@ -811,13 +1023,18 @@ async function saveLocations(idx){
   }
   
   toast('📤 Guardando ' + locs.length + ' localización(es) en ShipStation...');
-  
+
   try {
+    const token = getToken();
+    if(!token){
+      toast('❌ No hay sesión activa');
+      return;
+    }
     // Enviar como array; ShipStation puede guardar comma-separated o JSON
     // Formato: "A-1, A-2, A-3" o como JSON array
     const locationString = locs.join(', ');
-    
-    const res = await fetch(SB_PROXY + '/ss/create-product', {
+
+    const res = await savvyAuthFetch('/ss/create-product', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -852,9 +1069,14 @@ async function loadLocationsList(idx, sku, name, upc){
   if(!statusEl) return;
   
   try {
-    const res = await fetch(SB_PROXY + '/ss/location?sku=' + encodeURIComponent(sku));
+    const token = getToken();
+    if(!token){
+      statusEl.innerHTML = '<span style="color:var(--mu)">⚠️ No hay sesión activa</span>';
+      return;
+    }
+    const res = await savvyAuthFetch('/ss/location?sku=' + encodeURIComponent(sku));
     const data = await res.json();
-    
+
     if(!window.loadedProducts) window.loadedProducts = {};
     if(!window.loadedProducts[idx]) window.loadedProducts[idx] = {};
     
