@@ -354,3 +354,34 @@ test('BEHAVIOR: Token absence blocks fetch execution', async (t) => {
     assert.ok(beforeFetch.includes('throw'), 'Should throw before fetch if no token');
   }
 });
+
+test('CLEANUP: SAVVY_CONFIG removed, SB_PROXY and /auth/login intact', async (t) => {
+  // Verify SAVVY_CONFIG no longer exists
+  assert.ok(!appCode.includes('const SAVVY_CONFIG'), 'SAVVY_CONFIG declaration should be removed');
+  assert.ok(!appCode.includes('SAVVY_CONFIG ='), 'SAVVY_CONFIG assignment should not exist');
+  assert.ok(!appCode.match(/\bSAVVY_CONFIG\b/), 'No references to SAVVY_CONFIG anywhere');
+
+  // Verify savvy-config-production URL does not exist
+  assert.ok(!appCode.includes('savvy-config-production'), 'savvy-config-production URL should not exist');
+
+  // Verify no fetch to /config endpoint
+  assert.ok(!appCode.includes("fetch(SAVVY_CONFIG"), 'No fetch using SAVVY_CONFIG');
+  assert.ok(!appCode.includes("'/config'"), 'No /config endpoint references');
+  assert.ok(!appCode.includes('"/config"'), 'No /config endpoint references');
+
+  // Verify SB_PROXY remains intact
+  assert.ok(appCode.includes('const SB_PROXY = \'https://savvy-ebay-prices-production.up.railway.app\''),
+    'SB_PROXY must remain unchanged');
+
+  // Verify /auth/login endpoint remains intact
+  assert.ok(appCode.includes("'/auth/login'"), '/auth/login endpoint must remain');
+  assert.ok(appCode.includes('fetch(SB_PROXY + \'/auth/login\''), 'Must fetch to SB_PROXY + /auth/login');
+
+  // Verify all 6 protected routes still use SB_PROXY
+  assert.ok(appCode.includes("'/sb/search"), 'savvyAuthFetch /sb/search route exists');
+  assert.ok(appCode.includes("'/ss/location"), 'savvyAuthFetch /ss/location route exists');
+  assert.ok(appCode.includes("'/ebay-item-dates"), 'savvyAuthFetch /ebay-item-dates route exists');
+  assert.ok(appCode.includes("'/ebay-sales"), 'savvyAuthFetch /ebay-sales route exists');
+  assert.ok(appCode.includes("'/ss/create-product"), 'savvyAuthFetch /ss/create-product route exists');
+  assert.ok(appCode.includes("'/sb/update-inventory"), 'savvyAuthFetch /sb/update-inventory route exists');
+});
