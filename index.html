@@ -210,7 +210,7 @@
   <div style="font-size:12px;color:var(--mu);text-align:center;margin:12px 0">— or type manually —</div>
 
   <div class="upc-manual">
-    <input type="number" id="manualUpc" placeholder="Enter UPC or SKU..." inputmode="numeric">
+    <input type="text" id="manualUpc" placeholder="Enter UPC or SKU..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <button class="btn" style="width:auto;padding:12px 16px" onclick="searchManual()" ontouchend="event.preventDefault();searchManual()">🔍</button>
   </div>
 
@@ -222,7 +222,7 @@
   <button class="btn sec" style="margin-bottom:12px" onclick="showScreen('scr-home')" ontouchend="event.preventDefault();showScreen('scr-home')">← Back</button>
   <div id="reader"></div>
   <div class="upc-manual">
-    <input type="number" id="scanUpc" placeholder="Or type UPC here..." inputmode="numeric">
+    <input type="text" id="scanUpc" placeholder="Or type UPC or SKU here..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <button class="btn" style="width:auto;padding:12px 16px" onclick="searchFromScan()" ontouchend="event.preventDefault();searchFromScan()">🔍</button>
   </div>
 </div>
@@ -462,19 +462,49 @@ function searchManual(){
   searchUPC(v);
 }
 
+// ── SEARCH PARSER ────────────────────────────────────────────
+// Unico punto que interpreta lo que se escribe, pega, escanea o se toca en
+// Busquedas recientes. Solo se recortan espacios de los extremos: nunca se
+// quitan letras ni guiones (antes un replace(/\D/g,'') convertia
+// PLU-843445030108-1 en 8434450301081).
+//   "031604004033"          -> { kind:'upc', upc:'031604004033' }
+//   "IRW-710363598525-2"    -> { kind:'sku', sku:'IRW-710363598525-2', prefix:'IRW', upc:'710363598525', pack:2 }
+//   "NAT-031604004033-2pk"  -> { kind:'sku', sku:'NAT-031604004033-2pk', prefix:'NAT', upc:'031604004033', pack:2 }
+// El SKU original se guarda tal cual (no se reescribe -2 a -2pk ni al reves).
+function parseSearchQuery(raw){
+  const text = String(raw == null ? '' : raw).trim();
+  if(/^\d+$/.test(text)) return { kind: 'upc', upc: text, text };
+  const m = /^([A-Za-z]{2,3})-(\d{8,14})-([1-9]\d?)(pk)?$/i.exec(text);
+  if(m) return { kind: 'sku', sku: text, prefix: m[1].toUpperCase(), upc: m[2], pack: parseInt(m[3], 10), text };
+  return { kind: 'invalid', text };
+}
+
 // ── SEARCH SELLBRITE via Railway Proxy ───────────────────────
-async function searchUPC(upc){
+async function searchUPC(input){
   if(!isAuthenticated()){ showLoginScreen(); return; }
+  const q = parseSearchQuery(input);
+  if(q.kind === 'invalid'){
+    toast('⚠️ Usa un UPC (solo números) o un SKU completo, ej. LEG-673419373609-2pk');
+    return;
+  }
   showScreen('scr-load');
-  const upcClean = upc.replace(/\D/g,'');
-  $('load-msg').textContent = 'Searching Sellbrite for UPC: ' + upcClean + '...';
+  const upcClean = q.upc;
+  $('load-msg').textContent = q.kind === 'sku'
+    ? 'Searching Sellbrite for SKU: ' + q.sku + '...'
+    : 'Searching Sellbrite for UPC: ' + upcClean + '...';
 
   try {
-    const res = await savvyAuthFetch('/sb/search?upc=' + encodeURIComponent(upcClean));
+    // Con SKU se manda el prefijo como brand: el backend arma los SKU
+    // candidatos exactos (PREFIJO-UPC-N y -Npk) en vez de su respaldo
+    // limitado. Solo UPC: igual que antes, sin inventar marca.
+    const brandParam = q.kind === 'sku' ? '&brand=' + encodeURIComponent(q.prefix) : '';
+    const res = await savvyAuthFetch('/sb/search?upc=' + encodeURIComponent(upcClean) + brandParam);
     const data = await res.json();
 
     if(res.status === 404 || data.status === 'not_found'){
-      showNotFound('No product found with UPC: ' + upcClean + '\n\nMake sure the UPC is part of your SKU in Sellbrite (e.g. NIK-' + upcClean + '-1PK)', upcClean);
+      showNotFound(q.kind === 'sku'
+        ? 'No product found for SKU: ' + q.sku + ' (UPC ' + upcClean + ')'
+        : 'No product found with UPC: ' + upcClean + '\n\nMake sure the UPC is part of your SKU in Sellbrite (e.g. NIK-' + upcClean + '-1PK)', upcClean);
       return;
     }
 
@@ -482,7 +512,7 @@ async function searchUPC(upc){
       throw new Error(data.error || 'Search failed');
     }
 
-    await showProductFromProxy(data, upcClean);
+    await showProductFromProxy(data, upcClean, q.kind === 'sku' ? q.sku : null);
 
   } catch(err){
     console.error('Search error:', err);
@@ -505,12 +535,29 @@ async function sbFetch(path, options={}){
 }
 
 // ── SHOW PRODUCT FROM PROXY ─────────────────────────────────
-async function showProductFromProxy(data, searchedUpc){
+async function showProductFromProxy(data, searchedUpc, searchedSku){
   // El backend ahora devuelve una LISTA de paquetes (data.products).
   // Soportamos también el formato antiguo (data.product) por si acaso.
   let products = data.products;
   if(!products && data.product){ products = [ {...data.product, inventory: data.inventory} ]; }
   products = products || [];
+
+  // Si se busco un SKU exacto, ese paquete va primero. Nunca se sustituye
+  // por otro pack: si no vino, se avisa y se muestran los del mismo UPC.
+  // searchedSku ya paso parseSearchQuery (solo letras, digitos y guiones).
+  let skuNotice = '';
+  if(searchedSku){
+    const want = searchedSku.toUpperCase();
+    const exact = products.filter(p => String(p.sku||'').toUpperCase() === want);
+    if(exact.length){
+      products = exact.concat(products.filter(p => String(p.sku||'').toUpperCase() !== want));
+    } else {
+      skuNotice = `<div class="prod-card" id="sku-notice" style="text-align:center;padding:12px;border:2px solid var(--dw)">
+         <div style="font-size:13px;color:var(--dw);font-weight:700">⚠️ SKU exacto no encontrado: ${searchedSku}</div>
+         <div style="font-size:12px;color:var(--mu)">Mostrando otros paquetes del mismo UPC</div>
+       </div>`;
+    }
+  }
 
   // Guardar todos los productos en memoria para el update por SKU
   window.loadedProducts = {};
@@ -593,7 +640,7 @@ async function showProductFromProxy(data, searchedUpc){
        </div>`
     : '';
 
-  $('result-content').innerHTML = header + cards;
+  $('result-content').innerHTML = skuNotice + header + cards;
   showScreen('scr-result');
   if(products[0]){ saveRecentSearch(products[0].sku, products[0].name, upcShown); }
 
@@ -827,13 +874,25 @@ function renderRecent(){
   if(!recent.length){ el.innerHTML=''; return; }
   el.innerHTML = `
     <div class="section-title" style="margin-bottom:8px">Recent Searches</div>
-    ${recent.map(r=>`
-      <div class="prod-card" style="padding:12px;cursor:pointer" onclick="searchUPC('${r.upc||r.sku}')" ontouchend="event.preventDefault();searchUPC('${r.upc||r.sku}')">
+    ${recent.map((r, i)=>`
+      <div class="prod-card" style="padding:12px;cursor:pointer" onclick="searchRecent(${i})" ontouchend="event.preventDefault();searchRecent(${i})">
         <div style="font-size:11px;color:var(--ac);font-weight:700">${r.sku}</div>
         <div style="font-size:14px;font-weight:600;margin-top:2px">${r.name||'—'}</div>
       </div>
     `).join('')}
   `;
+}
+
+// Busqueda reciente: el SKU exacto si es un SKU valido; si no, el UPC.
+function recentSearchQuery(r){
+  r = r || {};
+  if(r.sku && parseSearchQuery(r.sku).kind === 'sku') return r.sku;
+  return r.upc || r.sku || '';
+}
+
+function searchRecent(i){
+  const recent = JSON.parse(localStorage.getItem('inv_recent')||'[]');
+  if(recent[i]) searchUPC(recentSearchQuery(recent[i]));
 }
 
 // ── INIT ─────────────────────────────────────────────────────
